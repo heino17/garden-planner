@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="copyright" content="2026 - heino17" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pflanzen-Datenbank pflegen</title>
+<script>
+  // Theme so früh wie möglich setzen (vor dem ersten Rendern), damit die
+  // Seite nicht kurz hell aufblitzt, bevor JS weiter unten übernimmt.
+  // Kein gespeicherter Wert vorhanden -> Start im Dunkelmodus (Wunsch:
+  // beim Eintritt dunkler starten statt in der hellen Standardansicht).
+  (function(){
+    const THEME_STORAGE_KEY = "datenbank_bearbeiten_theme";
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    const theme = (saved === "light" || saved === "dark") ? saved : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<script src="pflanzen.js"></script>
+<script src="datenbank_bearbeiten_lang.js"></script>
+<style>
+  :root{
+    --bg:#f5f3ec;
+    --panel:#ffffff;
+    --border:#d8d3c4;
+    --text:#2e2a20;
+    --muted:#7a7566;
+    --accent:#4c7a3d;
+    --accent-dark:#3a5e2f;
+    --danger:#a8502b;
+    --danger-dark:#8a3f20;
+    --row-alt:#f0eee4;
+    --focus:#3f6b3b;
+    --hover-row:#eef4ea;
+    --selected-row:#dcecd4;
+    --warn-bg:#fff3cd;
+    --warn-border:#e0b84c;
+    --warn-text:#6b5410;
+    --error-bg:#fbeae3;
+    --field-bg:#ffffff;
+    --shadow:rgba(0,0,0,0.15);
+  }
+  html[data-theme="dark"]{
+    --bg:#4A3A2A;
+    --panel:#5c4936;
+    --border:#7a6249;
+    --text:#f0e8dc;
+    --muted:#c9b8a3;
+    --accent:#7fb567b8;
+    --accent-dark:#5c8f4a;
+    --danger:#6c1e1e;
+    --danger-dark:#bc0303;
+    --row-alt:#40311f;
+    --focus:#9ed48a;
+    --hover-row:#5a6b46;
+    --selected-row:#5a7040;
+    --warn-bg:#6b551f;
+    --warn-border:#a9862a;
+    --warn-text:#f5dfa0;
+    --error-bg:#6b3c2c;
+    --field-bg:#3d2f21;
+    --shadow:rgba(0,0,0,0.5);
+  }
+  *{box-sizing:border-box;}
+  html{color-scheme:light;}
+  html[data-theme="dark"]{color-scheme:dark;}
+  body{
+    margin:0;
+    font-family:"Segoe UI", Verdana, Arial, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    transition:background .15s, color .15s;
+  }
+  header{
+    position:sticky;
+    top:0;
+    z-index:100;
+    padding:16px 24px;
+    background:var(--accent-dark);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  header h1{
+    margin:0;
+    font-size:1.3rem;
+    font-weight:600;
+  }
+  header .sub{
+    margin-left: 25px;
+    font-size:0.85rem;
+    opacity:0.85;
+  }
+  header.collapsed{
+    padding:4px 12px;
+    gap:8px;
+  }
+  header.collapsed h1{
+    font-size:1rem;
+  }
+  header.collapsed #headerToggleBtn{
+    padding:2px 8px;
+    font-size:0.85rem;
+  }
+  header.collapsed #exportBtn{
+    padding:4px 10px;
+    font-size:0.8rem;
+  }
+  header.collapsed .sub{
+    display:none;
+  }
+  header.collapsed .hideWhenCollapsed{
+    display:none !important;
+  }
+  #headerToggleBtn, #themeToggleBtn{
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.6);
+    color:#fff;
+    padding:8px 12px;
+    font-size:1rem;
+    line-height:1;
+  }
+  #headerToggleBtn:hover, #themeToggleBtn:hover{
+    background:rgba(255,255,255,0.15);
+  }
+  header.collapsed #themeToggleBtn{
+    padding:4px 8px;
+    font-size:0.85rem;
+  }
+  .lang-controls{
+    display:flex;
+    align-items:center;
+  }
+  #langSelect{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:8px 10px;
+    border-radius:5px;
+    font-size:0.85rem;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  #langSelect:hover{background:var(--accent-dark);}
+  header.collapsed #langSelect{
+    padding:4px 8px;
+    font-size:0.8rem;
+  }
+  .toolbar{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  button{
+    font-family:inherit;
+    font-size:0.9rem;
+    padding:8px 14px;
+    border-radius:6px;
+    border:1px solid transparent;
+    cursor:pointer;
+    background:var(--accent);
+    color:#fff;
+    transition:background .15s;
+  }
+  button:hover{background:var(--accent-dark);}
+  button.secondary{
+    background:var(--field-bg);
+    color:var(--accent-dark);
+    border-color:var(--accent);
+  }
+  button.secondary:hover{background:var(--hover-row);}
+  /* newPlantBtn, newMaterialBtn, exportCsvBtn: bleiben bewusst immer in
+     ihrer Hell-Optik, auch im Dark Mode (Wunsch von Heino) - feste Farben
+     statt Theme-Variablen. */
+  button.alwaysLight{
+    background:#ffffff;
+    color:#3a5e2f;
+    border-color:#4c7a3d;
+  }
+  button.alwaysLight:hover{background:#eef4ea;}
+  button.danger{background:var(--danger);}
+  button.danger:hover{background:var(--danger-dark);}
+  button:disabled{background:#c9c5b8;cursor:not-allowed;}
+  button.needsExport{
+    background:#c9711a;
+    animation:pulseExport 1.8s ease-in-out infinite;
+  }
+  button.needsExport:hover{background:#a85c12;}
+  @keyframes pulseExport{
+    0%, 100% { box-shadow:0 0 0 0 rgba(201,113,26,0.5); }
+    50% { box-shadow:0 0 0 6px rgba(201,113,26,0); }
+  }
+  #exportBtn.hasChanges{
+    background:#d98a1f;
+    animation:pulseExport 1.6s ease-in-out infinite;
+  }
+  #exportBtn.hasChanges:hover{background:#b8721a;}
+  @keyframes pulseExport{
+    0%, 100%{box-shadow:0 0 0 0 rgba(217,138,31,0.5);}
+    50%{box-shadow:0 0 0 6px rgba(217,138,31,0);}
+  }
+  input[type=file]{display:none;}
+
+  main{
+    display:flex;
+    gap:16px;
+    padding:16px;
+    margin-bottom:  50px;
+    align-items:flex-start;
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:16px;
+  }
+  #listPanel{
+    flex:1 1 420px;
+    min-width:340px;
+  }
+  #formPanel{
+    flex:1 1 480px;
+    min-width:360px;
+    position:sticky;
+    top:16px;
+  }
+  .panel h2{
+    margin:0 0 12px 0;
+    font-size:1.05rem;
+    color:var(--text);
+    border-bottom:2px solid var(--border);
+    padding-bottom:8px;
+  }
+  .status{
+    font-size:0.85rem;
+    color:var(--muted);
+    margin-bottom:10px;
+  }
+  .status.warn{color:var(--danger);font-weight:600;}
+
+  .fileNameLine{
+    font-size:0.9rem;
+    padding:8px 10px;
+    border-radius:6px;
+    margin-bottom:10px;
+    background:var(--row-alt);
+    border:1px solid var(--border);
+  }
+  .fileNameLine.differentFile{
+    background:var(--warn-bg);
+    border-color:var(--warn-border);
+    color:var(--warn-text);
+  }
+  .fileNameLine strong{font-family:monospace;}
+
+  .searchRow{
+    display:flex;
+    gap:8px;
+    margin-bottom:12px;
+  }
+  .searchRow input{
+    flex:1;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:0.9rem;
+    background:var(--field-bg);
+    color:var(--text);
+  }
+  .searchRow button{
+    padding:8px 12px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    background:var(--field-bg);
+    cursor:pointer;
+    font-size:0.9rem;
+    color:var(--accent-dark);
+  }
+  .searchRow button:hover{
+    background:var(--hover-row);
+  }
+
+  /* Emoji-Picker fürs Icon-Feld */
+  .iconFieldRow{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    position:relative;
+  }
+  .iconFieldRow input{
+    flex:1;
+  }
+  .emojiPickerBtn{
+    flex:0 0 auto;
+    padding:6px 10px;
+    font-size:1.1rem;
+    border:1px solid var(--border);
+    border-radius:6px;
+    background:var(--field-bg);
+    cursor:pointer;
+  }
+  .emojiPickerBtn:hover{
+    background:var(--row-alt);
+  }
+  .emojiPickerPopup{
+    position:absolute;
+    top:100%;
+    left:0;
+    margin-top:4px;
+    z-index:50;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:0 4px 16px var(--shadow);
+    padding:8px;
+    display:grid;
+    grid-template-columns:repeat(8, 1fr);
+    gap:4px;
+    max-width:400px;
+    max-height:400px;
+    overflow-y:auto;
+  }
+  .emojiPickerPopup button{
+    font-size:1.3rem;
+    line-height:1;
+    padding:6px;
+    border:none;
+    background:transparent;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .emojiPickerPopup button:hover{
+    background:var(--row-alt);
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.85rem;
+  }
+  th,td{
+    text-align:left;
+    padding:6px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  th{
+    background:var(--row-alt);
+    color:var(--text);
+    position:sticky;
+    top:0;
+    white-space:nowrap;
+  }
+  tbody tr:hover{background:var(--hover-row);cursor:pointer;}
+  tbody tr.selected{background:var(--selected-row);}
+  .idCell{color:var(--muted);font-size:0.78rem;}
+  .colorCell{
+    width:14px;
+    padding-left:2px;
+    padding-right:2px;
+  }
+  .colorChip{
+    width:14px;
+    height:22px;
+    border-radius:3px;
+    border:1px solid rgba(0,0,0,0.15);
+    display:block;
+  }
+  .rowIconImg{
+    width:22px;
+    height:22px;
+    object-fit:contain;
+    display:block;
+  }
+  .rowActions button{
+    padding:3px 8px;
+    font-size:0.78rem;
+    margin-left:4px;
+  }
+  .sectionLabel{
+    margin:16px 0 6px 0;
+    font-weight:600;
+    color:var(--text);
+    font-size:0.95rem;
+  }
+  .sectionLabel:first-child{margin-top:0;}
+
+  .tableWrap{
+    max-height:340px;
+    overflow-y:auto;
+    border:1px solid var(--border);
+    border-radius:6px;
+  }
+
+  form .field{
+    margin-bottom:10px;
+  }
+  form label{
+    display:block;
+    font-size:0.78rem;
+    color:var(--muted);
+    margin-bottom:3px;
+  }
+  form input[type=text], form input[type=number], form textarea, form select{
+    width:100%;
+    padding:7px 8px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:0.88rem;
+    font-family:inherit;
+    background:var(--field-bg);
+    color:var(--text);
+  }
+  form input:focus, form textarea:focus, form select:focus{
+    outline:2px solid var(--focus);
+    outline-offset:1px;
+  }
+  form textarea{resize:vertical;min-height:44px;}
+  .fieldGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 10px;
+  }
+  .fieldGrid .field.full{grid-column:1/-1;}
+  .kindSwitch{
+    display:flex;
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .kindSwitch label{
+    flex:1;
+    text-align:center;
+    padding:8px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    cursor:pointer;
+    font-size:0.85rem;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .kindSwitch input{display:none;}
+  .kindSwitch input:checked + span{color:var(--accent-dark);font-weight:600;}
+  .kindSwitch label:has(input:checked){
+    border-color:var(--accent);
+    background:var(--hover-row);
+  }
+  .formActions{
+    display:flex;
+    gap:8px;
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid var(--border);
+  }
+  .hint{
+    font-size:0.78rem;
+    color:var(--muted);
+    margin-top:2px;
+  }
+  .imgPreviewWrap{margin-top:6px;}
+  .imgPreview{
+    max-width:120px;
+    max-height:120px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:4px;
+    background:var(--field-bg);
+    display:block;
+  }
+  .tooltipIcon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    margin-top: -10px;
+    width:15px;
+    height:15px;
+    border-radius:50%;
+    background:var(--accent);
+    color:#fff;
+    font-size:0.7rem;
+    font-weight:700;
+    cursor:help;
+    vertical-align:middle;
+    line-height:1;
+  }
+  .tooltipIcon:hover{background:var(--accent-dark);}
+  .errorBox{
+    background:var(--error-bg);
+    border:1px solid var(--danger);
+    color:var(--danger-dark);
+    padding:8px 10px;
+    border-radius:6px;
+    font-size:0.85rem;
+    margin-bottom:10px;
+  }
+  .emptyState{
+    color:var(--muted);
+    font-size:0.9rem;
+    padding:20px;
+    text-align:center;
+  }
+  .dupWarn{
+    background:var(--warn-bg);
+    border:1px solid var(--warn-border);
+    color:var(--warn-text);
+    padding:6px 8px;
+    border-radius:6px;
+    font-size:0.8rem;
+    margin-top:4px;
+  }
+
+  footer{
+    position: fixed;
+    width: 100%;
+    bottom: 0;
+    left: 0;
+    margin: 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background: var(--accent-dark);
+    color:#c8d9c2;
+    font-size:11.5px;
+    padding: 6px 16px;
+    border-top: 1px solid var(--accent);
+  }
+  footer .footer-left{ flex:3 0 auto; text-align:left; }
+  footer .footer-center{ flex:3 0 auto; text-align:center; }
+  footer .footer-right{ flex:3 0 auto; text-align:right; }
+  footer .credits-link{
+    color:#c8d9c2;
+    text-decoration:underline;
+    cursor:help;
+  }
+  footer .credits-link:hover{color:#fff;}
+  .credits-link::after{
+    content: attr(data-tooltip);
+    position:absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    width: max-content;
+    max-width: 300px;
+    background: #3A5E2F;
+    color:#c8d9c2;
+    border: 1px solid #5a4630;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size:11.5px;
+    line-height:1.4;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    opacity:0;
+    visibility:hidden;
+    transition: opacity 0.15s ease;
+    pointer-events:none;
+    z-index: 10;
+  }
+  .credits-link:hover::after{
+    opacity:1;
+    visibility:visible;
+  }
+
+  /* ==================================================================
+     Mobile-Anpassung (Smartphones/schmale Tablets)
+     Desktop-Layout bleibt oberhalb dieser Breite unverändert.
+  ================================================================== */
+  @media (max-width: 720px){
+    header{
+      padding:12px 14px;
+      flex-direction:column;
+      align-items:stretch;
+    }
+    header h1{font-size:1.1rem;}
+    header .sub{font-size:0.78rem;}
+    .toolbar{
+      flex-direction:column;
+      align-items:stretch;
+      width:100%;
+    }
+    .toolbar button, .toolbar label{
+      width:100%;
+      text-align:center;
+      padding:10px 14px;
+      font-size:0.95rem;
+    }
+
+    main{
+      flex-direction:column;
+      padding:10px;
+      gap:12px;
+    }
+    .panel{padding:12px;}
+    #listPanel, #formPanel{
+      flex:1 1 auto;
+      min-width:0;
+      width:100%;
+    }
+    #formPanel{
+      position:static; /* sticky auf Mobile eher hinderlich als hilfreich */
+    }
+
+    .tableWrap{max-height:280px;}
+    table{font-size:0.8rem;}
+    th, td{padding:6px 4px;}
+    .idCell{
+      display:none; /* Platz sparen: id ist bei Bedarf im Formular sichtbar */
+    }
+    .rowActions button{
+      padding:6px 8px;
+      font-size:0.85rem;
+    }
+
+    .fieldGrid{
+      grid-template-columns:1fr; /* Formularfelder auf Mobile untereinander */
+    }
+    .formActions{
+      flex-wrap:wrap;
+    }
+    .formActions button{
+      flex:1 1 auto;
+      min-width:110px;
+    }
+    footer{
+      font-size:10px;
+      padding:6px 10px;
+      gap:6px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header id="mainHeader">
+  <div>
+    <h1 id="mainHeading">🌱 Julia's Pflanzen-Datenbank</h1>
+    <div class="sub" id="subTitle">Editor für pflanzen.js – Pflanzen &amp; Baumaterial für den Gartenplaner</div>
+  </div>
+  <div class="toolbar">
+    <label id="loadOtherDbLabel" class="secondary hideWhenCollapsed" style="padding:8px 14px;border:1px solid var(--accent);border-radius:6px;cursor:pointer;">
+      <span id="loadOtherDbLabelText">📂 Andere Datenbank laden</span>
+      <input type="file" id="fileInput" accept=".js">
+    </label>
+    <button id="newPlantBtn" class="secondary alwaysLight hideWhenCollapsed">➕ Neue Pflanze</button>
+    <button id="newMaterialBtn" class="secondary alwaysLight hideWhenCollapsed">➕ Neues Material</button>
+    <button id="exportBtn">💾 Datenbank speichern</button>
+    <button id="exportCsvBtn" class="secondary alwaysLight hideWhenCollapsed">📊 Als CSV exportieren</button>
+    <div class="lang-controls hideWhenCollapsed">
+      <select id="langSelect" title="Sprache wählen">
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="en">🇺🇸 American</option>
+        <option value="ru">🇷🇺 Русский</option>
+        <option value="es">🇪🇸 Español</option>
+        <option value="fr">🇫🇷 Francés</option>
+        <option value="ja">🇯🇵 日本語</option>
+        <option value="ko">🇰🇷 한국어</option>
+        <option value="zh_CN">🇨🇳 简体中文</option>
+      </select>
+    </div>
+    <button id="themeToggleBtn" title="Hell/Dunkel umschalten">🌙</button>
+    <button id="headerToggleBtn" title="Header ein-/ausklappen">▲</button>
+  </div>
+</header>
+
+<main>
+  <section id="listPanel" class="panel">
+    <h2 id="overviewHeading">Übersicht</h2>
+    <div id="fileNameLine" class="fileNameLine" style="display:none;"></div>
+    <div id="statusLine" class="status">Noch keine Datei geladen. Lade zuerst deine pflanzen.js.</div>
+
+    <div class="searchRow">
+      <input type="text" id="searchBox" placeholder="Suchen (Name, id, Nutzung, Notiz ...)">
+      <button id="searchClearBtn" title="Suche leeren">✖</button>
+    </div>
+
+    <div class="sectionLabel" id="plantGroupLabel"><span id="plantGroupLabelText">🌿 Pflanzen</span> (<span id="plantCount">0</span>)</div>
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th class="colorCell"></th><th id="thIconPlant">Icon</th><th id="thNamePlant">Name</th><th id="thIdPlant">id</th><th></th></tr></thead>
+        <tbody id="plantTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="sectionLabel" id="materialGroupLabel"><span id="materialGroupLabelText">🧱 Baumaterial</span> (<span id="materialCount">0</span>)</div>
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th class="colorCell"></th><th id="thIconMaterial">Icon</th><th id="thNameMaterial">Name</th><th id="thIdMaterial">id</th><th></th></tr></thead>
+        <tbody id="materialTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="formPanel" class="panel">
+    <h2 id="formTitle">Eintrag bearbeiten</h2>
+    <div id="formArea">
+      <div class="emptyState" id="formEmptyState">Wähle links einen Eintrag aus der Liste, oder lege über die Buttons oben einen neuen an.</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-left">(c) 2026 <a style="color: #c8d9c2 !important;" target="_blank" href="https://github.com/heino17/garden-planner">heino17</a></div>
+  <div class="footer-center">❤️</div>
+  <div class="footer-right"><a href="#" id="footerCreditsLink" class="credits-link" data-tooltip="Diese Anwendung wurde im Auftrag zu 100% von Anthropic's Claude.ai, in einem kostenlosen Konto erstellt. Ganz erstaunlich! 🧚🏻‍♀️" onclick="return false;">Credits</a></div>
+</footer>
+
+<script>
+/* ==================================================================
+   Header ein-/ausklappen
+================================================================== */
+(function(){
+  const headerEl = document.getElementById("mainHeader");
+  const headingEl = document.getElementById("mainHeading");
+  const toggleBtn = document.getElementById("headerToggleBtn");
+
+  function setCollapsed(collapsed){
+    headerEl.classList.toggle("collapsed", collapsed);
+    // t() erst zur Laufzeit aufrufen (nicht beim Setup cachen!), damit
+    // hier immer die gerade aktive Sprache verwendet wird - sonst reißt
+    // das Ein-/Ausklappen die Überschrift zurück auf Deutsch, egal welche
+    // Sprache im Dropdown gewählt ist.
+    headingEl.textContent = collapsed ? t("title_short") : t("title_full");
+    toggleBtn.textContent = collapsed ? "▼" : "▲";
+  }
+
+  toggleBtn.addEventListener("click", ()=>{
+    setCollapsed(!headerEl.classList.contains("collapsed"));
+  });
+})();
+
+/* ==================================================================
+   I18N (Mehrsprachigkeit)
+   I18N / I18N_AVAILABLE / APPLICATION_STARTUP_LANGUAGE_CODE kommen aus
+   datenbank_bearbeiten_lang.js. t(key, vars) holt den Text der aktuellen
+   Sprache und ersetzt Platzhalter wie {name} durch vars.name.
+   Fällt eine Sprache/Key mal aus (z.B. Tippfehler), springt es auf
+   Deutsch als Sicherheitsnetz zurück, damit nie ein leerer Text oder
+   "undefined" im UI auftaucht.
+================================================================== */
+/* ==================================================================
+   Hell/Dunkel-Umschalter
+   Das <html data-theme="..."> Attribut wird bereits ganz oben im <head>
+   per Inline-Script gesetzt (verhindert Aufblitzen). Hier nur noch:
+   Button-Icon passend setzen + Klick zum Umschalten + Merken der Wahl.
+================================================================== */
+const THEME_STORAGE_KEY = "datenbank_bearbeiten_theme";
+
+function applyThemeButtonIcon(){
+  const theme = document.documentElement.getAttribute("data-theme") || "dark";
+  document.getElementById("themeToggleBtn").textContent = theme === "dark" ? "☀️" : "🌙";
+}
+applyThemeButtonIcon();
+
+document.getElementById("themeToggleBtn").addEventListener("click", ()=>{
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem(THEME_STORAGE_KEY, next);
+  applyThemeButtonIcon();
+});
+
+const LANG_STORAGE_KEY = "datenbank_bearbeiten_lang";
+let currentLang = localStorage.getItem(LANG_STORAGE_KEY);
+if(!I18N_AVAILABLE.includes(currentLang)) currentLang = APPLICATION_STARTUP_LANGUAGE_CODE;
+
+// Übernimmt die Sprache aus dem URL-Parameter ?lang=xx, falls vorhanden und
+// gültig - z.B. wenn der Gartenplaner diesen Editor mit seiner aktuellen
+// Sprache aufruft (Link/Fenster mit ?lang=... öffnet). Hat Vorrang vor dem
+// gespeicherten localStorage-Wert und wird dort gleich mit abgelegt, damit
+// dieser Editor ab jetzt auch beim nächsten eigenständigen Aufruf (ohne
+// ?lang=) in derselben Sprache bleibt.
+const urlLang = new URLSearchParams(window.location.search).get("lang");
+if(urlLang && I18N_AVAILABLE.includes(urlLang)){
+  currentLang = urlLang;
+  localStorage.setItem(LANG_STORAGE_KEY, urlLang);
+}
+
+function t(key, vars){
+  let str = (I18N[currentLang] && I18N[currentLang][key]) ?? I18N.de[key] ?? key;
+  if(vars){
+    Object.keys(vars).forEach(k => {
+      str = str.replaceAll(`{${k}}`, vars[k]);
+    });
+  }
+  return str;
+}
+
+// Setzt alle statischen (nicht dynamisch neu erzeugten) Texte im DOM.
+// Dynamische Inhalte (Tabellen, Formular, Statuszeile ...) werden durch
+// erneutes Aufrufen ihrer jeweiligen render-Funktion aktualisiert - die
+// greifen ja bei jedem Aufruf ohnehin frisch auf t() zu. WICHTIG (siehe
+// Spickzettel): Texte, die eine render*()-Funktion sowieso bei jedem
+// Aufruf neu setzt, hier NICHT zusätzlich per getElementById anfassen!
+function applyStaticTexts(){
+  const headerEl = document.getElementById("mainHeader");
+  const collapsed = headerEl.classList.contains("collapsed");
+  document.title = t("title_full");
+  document.getElementById("mainHeading").textContent = collapsed ? t("title_short") : t("title_full");
+  document.getElementById("subTitle").textContent = t("sub_title");
+  document.getElementById("langSelect").title = t("tooltip_lang_select");
+  document.getElementById("headerToggleBtn").title = t("tooltip_header_toggle");
+  document.getElementById("themeToggleBtn").title = t("tooltip_theme_toggle");
+
+  document.getElementById("loadOtherDbLabelText").textContent = t("btn_load_other_db");
+  document.getElementById("newPlantBtn").textContent = t("btn_new_plant");
+  document.getElementById("newMaterialBtn").textContent = t("btn_new_material");
+  document.getElementById("exportCsvBtn").textContent = t("btn_export_csv");
+  // exportBtn-Text hängt vom hasChanges-Status ab, wird von markDirty() gesetzt:
+  markDirty(hasUnsavedChanges);
+
+  document.getElementById("overviewHeading").textContent = t("heading_overview");
+  document.getElementById("searchBox").placeholder = t("search_placeholder");
+  document.getElementById("searchClearBtn").title = t("tooltip_search_clear");
+
+  document.getElementById("thIconPlant").textContent = t("table_head_icon");
+  document.getElementById("thNamePlant").textContent = t("table_head_name");
+  document.getElementById("thIdPlant").textContent = t("table_head_id");
+  document.getElementById("thIconMaterial").textContent = t("table_head_icon");
+  document.getElementById("thNameMaterial").textContent = t("table_head_name");
+  document.getElementById("thIdMaterial").textContent = t("table_head_id");
+
+  const creditsLink = document.getElementById("footerCreditsLink");
+  creditsLink.textContent = t("footer_credits_link");
+  creditsLink.setAttribute("data-tooltip", t("footer_credits_tooltip"));
+}
+
+// Wendet eine Sprache komplett an: statische Texte + Neu-Rendern aller
+// dynamischen Bereiche, die Text enthalten (Tabellen, Statuszeile,
+// Formular/Detail-Bereich, Dateiname-Zeile).
+function applyLanguage(code){
+  currentLang = I18N_AVAILABLE.includes(code) ? code : APPLICATION_STARTUP_LANGUAGE_CODE;
+  document.getElementById("langSelect").value = currentLang;
+  localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+  applyStaticTexts();
+  updateGroupLabels();
+  renderLists();
+  if(selected){
+    openForm(selected.kind, selected.id);
+  } else {
+    document.getElementById("formTitle").textContent = t("form_title_default");
+    document.getElementById("formArea").innerHTML =
+      `<div class="emptyState" id="formEmptyState">${t("form_empty_state")}</div>`;
+  }
+  if(currentFileName){
+    showFileName(currentFileName);
+  }
+  // statusLine neu übersetzen: die zuletzt gesetzte Meldung (z.B. "Gespeichert:
+  // X") ist als key+vars gemerkt (siehe setStatusKey) und wird hier mit der
+  // neuen Sprache neu aufgebaut, statt in der alten Sprache stehen zu bleiben.
+  if(lastStatus){
+    setStatus(t(lastStatus.key, lastStatus.vars), lastStatus.isWarn);
+  } else {
+    document.getElementById("statusLine").textContent = t("status_initial");
+  }
+}
+
+document.getElementById("langSelect").addEventListener("change", (e)=>applyLanguage(e.target.value));
+
+/* ==================================================================
+   State
+================================================================== */
+let plants = [];
+let materials = [];
+let selected = null; // { kind:"plant"|"material", id: string|null (null = neu) }
+let hasUnsavedChanges = false; // true = seit letztem Laden/Export wurde etwas geändert
+let currentFileName = null; // Name der zuletzt geladenen Datei, wird beim Export als Vorschlag verwendet; null = noch keine Datei geladen
+let originalHeaderComment = null; // Kommentarblock am Dateianfang, wird beim Export beibehalten
+// Merkt sich die zuletzt per setStatusKey() gesetzte Statusmeldung als
+// { key, vars, isWarn }, damit applyLanguage() sie bei Sprachwechsel neu
+// übersetzen kann, statt sie in der alten Sprache stehen zu lassen. Muss
+// hier (vor dem ersten applyLanguage()-Aufruf weiter unten) deklariert
+// sein, sonst TDZ-Fehler.
+let lastStatus = null;
+
+const DEFAULT_HEADER_COMMENT =
+`/* ==================================================================
+   pflanzen.js
+   Datenquelle für den Gartenplaner. Bewusst als .js (nicht .json)
+   ausgelagert, damit die Datei auch unter file:// per <script src>
+   geladen werden kann, ohne an CORS/fetch-Restriktionen zu scheitern
+   (gleiches Prinzip wie lang.js beim Strickmuster-Editor).
+
+   Zum Pflegen: Kopiere ein bestehendes Objekt und passe die Werte an.
+   Felder, die du nicht hast, einfach weglassen oder leer lassen -
+   der Gartenplaner kommt mit fehlenden Werten klar.
+================================================================== */`;
+
+/* ==================================================================
+   Emoji-Auswahl für das Icon-Feld (nur Pflanzen &amp; Bäume)
+================================================================== */
+const PLANT_TREE_EMOJIS = [
+  "🌱","🌿","☘️","🍀","🌾","🌵","🌴","🌲","🌳","🥬","🍃",
+  "🎋","🎍","🪴","🌻","🌼","🌸","🌺","🌹","🥀","🥦","🎃",
+  "🍄","🍁","🍂","🌷","💐","🌰","🍇","🍓","🍒","🥝","🌶️",
+  "🍅","🌽","🥕","🫑","🥒","🍆","🥔","🫘","🧄","🧅","🥑",
+  "🫐","🍉","🍊","🍈","🍌","🍍","🍏","🍎","🍐","🍑","🥜",
+  "🥭","🏠","🏡","🏰","🏺",
+  "⛳","⚽","🌊","🏊","🐝","🐞","🦔"
+];
+
+/* ==================================================================
+   Feld-Definitionen (Grundlage: Spickzettel)
+================================================================== */
+const PLANT_FIELDS = [
+  { key:"id", get label(){ return t("field_id_label"); }, type:"text", required:true },
+  { key:"name", get label(){ return t("field_name_label"); }, type:"text", required:true },
+  { key:"icon", get label(){ return t("field_icon_label"); }, type:"text", required:true },
+  { key:"image", get label(){ return t("field_image_plant_label"); }, type:"image-path",
+    get tooltip(){ return t("field_image_tooltip"); } },
+  { key:"accent", get label(){ return t("field_accent_label"); }, type:"color-text", required:true },
+  { key:"listAccent", get label(){ return t("field_listAccent_label"); }, type:"color-text",
+    get tooltip(){ return t("field_listAccent_tooltip"); } },
+  { key:"plantSpacing", get label(){ return t("field_plantSpacing_label"); }, type:"text", required:true },
+  { key:"rowSpacing", get label(){ return t("field_rowSpacing_label"); }, type:"text" },
+  { key:"latin", get label(){ return t("field_latin_label"); }, type:"text" },
+  { key:"use", get label(){ return t("field_use_label"); }, type:"text" },
+  { key:"sowDepth", get label(){ return t("field_sowDepth_label"); }, type:"text" },
+  { key:"standort", get label(){ return t("field_standort_label"); }, type:"text" },
+  { key:"hoehe", get label(){ return t("field_hoehe_label"); }, type:"text" },
+  { key:"aussaat", get label(){ return t("field_aussaat_label"); }, type:"text" },
+  { key:"keimung", get label(){ return t("field_keimung_label"); }, type:"text" },
+  { key:"keimfaehigkeit", get label(){ return t("field_keimfaehigkeit_label"); }, type:"text" },
+  { key:"lebensdauer", get label(){ return t("field_lebensdauer_label"); }, type:"text" },
+  { key:"herkunft", get label(){ return t("field_herkunft_label"); }, type:"text" },
+  { key:"topfgroesse", get label(){ return t("field_topfgroesse_label"); }, type:"text" },
+  { key:"kulturdauer", get label(){ return t("field_kulturdauer_label"); }, type:"text" },
+  { key:"notiz", get label(){ return t("field_notiz_label"); }, type:"textarea", full:true },
+];
+
+const MATERIAL_FIELDS = [
+  { key:"id", get label(){ return t("field_id_label"); }, type:"text", required:true },
+  { key:"name", get label(){ return t("field_name_label"); }, type:"text", required:true },
+  { key:"icon", get label(){ return t("field_icon_label"); }, type:"text", required:true },
+  { key:"image", get label(){ return t("field_image_material_label"); }, type:"image-path",
+    get tooltip(){ return t("field_image_tooltip"); } },
+  { key:"accent", get label(){ return t("field_accent_label"); }, type:"color-text", required:true },
+  { key:"listAccent", get label(){ return t("field_listAccent_label"); }, type:"color-text",
+    get tooltip(){ return t("field_listAccent_tooltip"); } },
+  { key:"shape", get label(){ return t("field_shape_label"); }, type:"select", get options(){ return [
+      { value:"rect", label:t("field_shape_opt_rect") },
+      { value:"circle", label:t("field_shape_opt_circle") }
+  ]; } },
+  { key:"widthCm", get label(){ return t("field_widthCm_label"); }, type:"number", required:true,
+    get tooltip(){ return t("field_widthCm_tooltip"); } },
+  { key:"heightCm", get label(){ return t("field_heightCm_label"); }, type:"number", required:true,
+    get tooltip(){ return t("field_heightCm_tooltip"); } },
+  { key:"diameterCm", get label(){ return t("field_diameterCm_label"); }, type:"number",
+    get tooltip(){ return t("field_diameterCm_tooltip"); } },
+  { key:"pattern", get label(){ return t("field_pattern_label"); }, type:"select", get options(){ return [
+      { value:"", label:t("field_pattern_opt_none") },
+      { value:"pavePattern", label:t("field_pattern_opt_pave") },
+      { value:"brickPattern", label:t("field_pattern_opt_brick") },
+      { value:"grassPattern", label:t("field_pattern_opt_grass") }
+  ]; } },
+  { key:"use", get label(){ return t("field_use_label"); }, type:"text" },
+  { key:"notiz", get label(){ return t("field_notiz_label"); }, type:"textarea", full:true },
+];
+
+/* ==================================================================
+   Autoload beim Start: pflanzen.js wird oben per <script src="pflanzen.js">
+   eingebunden (gleiches Prinzip wie im Gartenplaner). Wenn PLANTS_DATA /
+   MATERIALS_DATA dadurch bereits global vorhanden sind, übernehmen wir
+   sie direkt - der Upload-Button bleibt als Fallback (z.B. andere Datei
+   testen, oder falls die Datei mal nicht neben dem Tool liegt).
+================================================================== */
+applyLanguage(currentLang); // setzt alle statischen Texte + initialen Status-Text
+
+(function tryAutoload(){
+  if(typeof PLANTS_DATA !== "undefined" && typeof MATERIALS_DATA !== "undefined"){
+    try{
+      // Tiefenkopie, damit wir die globalen Original-Arrays nicht direkt mutieren
+      plants = JSON.parse(JSON.stringify(PLANTS_DATA));
+      materials = JSON.parse(JSON.stringify(MATERIALS_DATA));
+      plants.forEach(p=>{ p.kind = "plant"; p.shape = "circle"; });
+      materials.forEach(m=>{ m.kind = "material"; if(!m.shape) m.shape = "rect"; });
+      sortByName(plants);
+      sortByName(materials);
+      originalHeaderComment = null; // Kommentarblock kennen wir hier nicht, Export nutzt DEFAULT_HEADER_COMMENT
+      showFileName("pflanzen.js");
+      setStatusKey("status_autoload_success", { plantCount: plants.length, materialCount: materials.length });
+      markDirty(false);
+      renderLists();
+    }catch(err){
+      setStatusKey("status_autoload_failed", { msg: err.message }, true);
+    }
+  } else {
+    setStatusKey("status_no_autoload", null, true);
+  }
+})();
+
+/* ==================================================================
+   Datei einlesen & parsen
+================================================================== */
+document.getElementById("fileInput").addEventListener("change", (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      parsePflanzenJs(ev.target.result);
+      showFileName(file.name);
+      setStatusKey("status_load_success", { plantCount: plants.length, materialCount: materials.length });
+      markDirty(false);
+      renderLists();
+    }catch(err){
+      setStatusKey("status_load_failed", { msg: err.message }, true);
+    }
+  };
+  reader.readAsText(file, "UTF-8");
+  e.target.value = ""; // erlaubt erneutes Laden derselben Datei
+});
+
+function parsePflanzenJs(text){
+  // Kommentarblock am Dateianfang sichern (alles vor der ersten "const")
+  const firstConstIdx = text.indexOf("const ");
+  originalHeaderComment = firstConstIdx > 0 ? text.slice(0, firstConstIdx).trim() : null;
+
+  const plantsMatch = text.match(/const\s+PLANTS_DATA\s*=\s*(\[[\s\S]*?\]);/);
+  const materialsMatch = text.match(/const\s+MATERIALS_DATA\s*=\s*(\[[\s\S]*?\]);/);
+
+  if(!plantsMatch) throw new Error("PLANTS_DATA nicht gefunden. Ist das die richtige Datei?");
+  if(!materialsMatch) throw new Error("MATERIALS_DATA nicht gefunden. Ist das die richtige Datei?");
+
+  // Die Arrays sind gültiges JS (kein reines JSON: unquoted keys).
+  // Wir werten sie sicher aus, ohne eval() auf dem gesamten Dateitext,
+  // per Function-Constructor beschränkt auf genau diesen Ausdruck.
+  plants = new Function("return " + plantsMatch[1])();
+  materials = new Function("return " + materialsMatch[1])();
+
+  // Absicherung: kind/shape falls in Quelle mal fehlen sollten
+  plants.forEach(p=>{ p.kind = "plant"; p.shape = "circle"; });
+  materials.forEach(m=>{ m.kind = "material"; if(!m.shape) m.shape = "rect"; });
+  sortByName(plants);
+  sortByName(materials);
+}
+
+function sortByName(list){
+  list.sort((a,b)=> String(a.name||"").localeCompare(String(b.name||""), "de", {sensitivity:"base"}));
+}
+
+function markDirty(isDirty){
+  hasUnsavedChanges = isDirty;
+  const btn = document.getElementById("exportBtn");
+  btn.classList.toggle("needsExport", isDirty);
+  btn.textContent = isDirty ? t("btn_export_db_dirty") : t("btn_export_db");
+}
+
+// Native Browser-Warnung bei Reload/Schließen der Seite, solange
+// ungespeicherte Änderungen vorliegen. Der Warntext selbst ist vom
+// Browser vorgegeben (aus Sicherheitsgründen nicht individuell wählbar).
+window.addEventListener("beforeunload", (e)=>{
+  if(hasUnsavedChanges){
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+
+function showFileName(name){
+  currentFileName = name;
+  const el = document.getElementById("fileNameLine");
+  const isDefault = name === "pflanzen.js";
+  el.style.display = "block";
+  el.classList.toggle("differentFile", !isDefault);
+  el.innerHTML = isDefault
+    ? t("filename_line", { name: `<strong>${escapeHtml(name)}</strong>` })
+    : t("filename_line_warning", { name: `<strong>${escapeHtml(name)}</strong>` });
+}
+
+// Merkt sich, welche Statusmeldung zuletzt gesetzt wurde (als t()-Key +
+// Variablen, nicht als fertigen String), damit applyLanguage() sie bei
+// Sprachwechsel neu übersetzen kann. lastStatus (siehe weiter oben bei den
+// State-Variablen) bleibt null, solange noch keine setStatusKey()-Meldung
+// gesetzt wurde.
+function setStatus(msg, isWarn){
+  const el = document.getElementById("statusLine");
+  el.textContent = msg;
+  el.className = "status" + (isWarn ? " warn" : "");
+}
+
+// Wie setStatus(), aber übersetzungsfähig: merkt sich key+vars, damit ein
+// späterer Sprachwechsel (applyLanguage) den Text neu erzeugen kann, statt
+// den zuletzt gesetzten (jetzt "veralteten") Text stehen zu lassen.
+function setStatusKey(key, vars, isWarn){
+  lastStatus = { key, vars, isWarn };
+  setStatus(t(key, vars), isWarn);
+}
+
+/* ==================================================================
+   Listen rendern
+================================================================== */
+document.getElementById("searchBox").addEventListener("input", renderLists);
+document.getElementById("searchClearBtn").addEventListener("click", ()=>{
+  const box = document.getElementById("searchBox");
+  box.value = "";
+  box.focus();
+  renderLists();
+});
+
+function matchesSearch(entry, term){
+  if(!term) return true;
+  term = term.toLowerCase();
+  return Object.values(entry).some(v => String(v ?? "").toLowerCase().includes(term));
+}
+
+// Setzt die Gruppen-Überschriften ("🌿 Pflanzen (n)" / "🧱 Baumaterial (n)").
+// Die Zähler-<span>s bleiben erhalten (renderLists füllt sie), nur das
+// umgebende Label-Emoji+Text wird bei Sprachwechsel neu gesetzt.
+function updateGroupLabels(){
+  document.getElementById("plantGroupLabelText").textContent = t("group_plants");
+  document.getElementById("materialGroupLabelText").textContent = t("group_materials");
+}
+
+function renderLists(){
+  const term = document.getElementById("searchBox").value.trim();
+
+  const plantBody = document.getElementById("plantTableBody");
+  const matBody = document.getElementById("materialTableBody");
+  plantBody.innerHTML = "";
+  matBody.innerHTML = "";
+
+  const filteredPlants = plants.filter(p=>matchesSearch(p, term));
+  const filteredMaterials = materials.filter(m=>matchesSearch(m, term));
+
+  document.getElementById("plantCount").textContent = filteredPlants.length;
+  document.getElementById("materialCount").textContent = filteredMaterials.length;
+
+  filteredPlants.forEach(p=>plantBody.appendChild(makeRow(p, "plant")));
+  filteredMaterials.forEach(m=>matBody.appendChild(makeRow(m, "material")));
+
+  if(filteredPlants.length===0){
+    plantBody.innerHTML = `<tr><td colspan="5" class="emptyState">${t("empty_no_matches")}</td></tr>`;
+  }
+  if(filteredMaterials.length===0){
+    matBody.innerHTML = `<tr><td colspan="5" class="emptyState">${t("empty_no_matches")}</td></tr>`;
+  }
+}
+
+function rowColorChipHtml(entry){
+  // Gleiche Priorität wie in gartenplaner.html: listAccent, falls gesetzt,
+  // sonst accent (auch wenn das "transparent" ist).
+  const color = entry.listAccent || entry.accent || "transparent";
+  return `<span class="colorChip" style="background:${escapeHtml(color)};"></span>`;
+}
+
+function rowIconHtml(entry){
+  // Priorität: Bild > Icon > leer. Falls das Bild nicht ladbar ist (falscher
+  // Pfad o.ä.), springt onerror auf das Icon zurück, oder bleibt leer.
+  if(entry.image){
+    const iconFallback = entry.icon ? escapeHtml(entry.icon) : "";
+    return `<img class="rowIconImg" src="${escapeHtml(entry.image)}" alt=""
+      onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'${iconFallback}'}))">`;
+  }
+  return entry.icon ? escapeHtml(entry.icon) : "";
+}
+
+function makeRow(entry, kind){
+  const tr = document.createElement("tr");
+  if(selected && selected.kind===kind && selected.id===entry.id){
+    tr.classList.add("selected");
+  }
+  tr.innerHTML = `
+    <td class="colorCell">${rowColorChipHtml(entry)}</td>
+    <td>${rowIconHtml(entry)}</td>
+    <td>${escapeHtml(entry.name || t("row_no_name"))}</td>
+    <td class="idCell">${escapeHtml(entry.id)}</td>
+    <td class="rowActions">
+      <button type="button" class="secondary editBtn">✏️</button>
+      <button type="button" class="danger deleteBtn">🗑️</button>
+    </td>
+  `;
+  tr.addEventListener("click", (e)=>{
+    if(e.target.closest("button")) return;
+    openForm(kind, entry.id);
+  });
+  tr.querySelector(".editBtn").addEventListener("click", ()=>openForm(kind, entry.id));
+  tr.querySelector(".deleteBtn").addEventListener("click", ()=>deleteEntry(kind, entry.id));
+  return tr;
+}
+
+function escapeHtml(str){
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* ==================================================================
+   Formular
+================================================================== */
+document.getElementById("newPlantBtn").addEventListener("click", ()=>openForm("plant", null));
+document.getElementById("newMaterialBtn").addEventListener("click", ()=>openForm("material", null));
+
+function getList(kind){ return kind==="plant" ? plants : materials; }
+function getFields(kind){ return kind==="plant" ? PLANT_FIELDS : MATERIAL_FIELDS; }
+
+function updateImagePreview(path, imgEl, hintEl){
+  path = (path || "").trim();
+  if(!path){
+    imgEl.style.display = "none";
+    hintEl.textContent = t("img_preview_hint_empty");
+    return;
+  }
+  hintEl.textContent = t("img_preview_hint_loading");
+  imgEl.onload = ()=>{
+    imgEl.style.display = "block";
+    hintEl.textContent = "";
+  };
+  imgEl.onerror = ()=>{
+    imgEl.style.display = "none";
+    hintEl.textContent = t("img_preview_hint_error");
+  };
+  imgEl.src = path;
+}
+
+function openForm(kind, id){
+  selected = { kind, id };
+  const isNew = id===null;
+  const entry = isNew ? {} : getList(kind).find(e=>e.id===id);
+
+  document.getElementById("formTitle").textContent = isNew
+    ? (kind==="plant" ? t("form_title_new_plant") : t("form_title_new_material"))
+    : (kind==="plant" ? t("form_title_edit_plant") : t("form_title_edit_material"));
+
+  const fields = getFields(kind);
+  const formArea = document.getElementById("formArea");
+
+  let html = `<form id="entryForm"><div class="fieldGrid">`;
+  fields.forEach(f=>{
+    const val = entry[f.key] ?? "";
+    const fullClass = f.full ? " full" : "";
+    html += `<div class="field${fullClass}">
+      <label for="f_${f.key}">${f.label}${f.required ? " *" : ""}${f.tooltip ? ` <span class="tooltipIcon" title="${escapeHtml(f.tooltip)}">?</span>` : ""}</label>`;
+    if(f.type==="textarea"){
+      html += `<textarea id="f_${f.key}" name="${f.key}">${escapeHtml(String(val))}</textarea>`;
+    } else if(f.type==="select"){
+      html += `<select id="f_${f.key}" name="${f.key}">`;
+      f.options.forEach(opt=>{
+        const isSelected = String(val)===opt.value ? " selected" : "";
+        html += `<option value="${escapeHtml(opt.value)}"${isSelected}>${escapeHtml(opt.label)}</option>`;
+      });
+      html += `</select>`;
+    } else if(f.type==="color-text"){
+      // Hex-Textfeld + visueller Farbwähler, synchron gehalten
+      const hexVal = /^#[0-9a-fA-F]{6}$/.test(val) ? val : "#808080";
+      const placeholder = f.key==="listAccent" ? t("field_listAccent_placeholder") : "#4c7a3d";
+      html += `<div style="display:flex; gap:8px; align-items:center;">
+        <input type="color" id="f_${f.key}_picker" value="${hexVal}" style="width:44px; height:36px; padding:2px; flex:0 0 auto;">
+        <input type="text" id="f_${f.key}" name="${f.key}" value="${escapeHtml(String(val))}" placeholder="${escapeHtml(placeholder)}" style="flex:1;">
+      </div>`;
+    } else if(f.type==="image-path"){
+      html += `<input type="text" id="f_${f.key}" name="${f.key}" value="${escapeHtml(String(val))}" placeholder="images/dateiname.png">
+        <div class="imgPreviewWrap">
+          <img id="f_${f.key}_preview" class="imgPreview" style="display:none;">
+          <span id="f_${f.key}_previewHint" class="hint">${val ? "" : t("img_preview_hint_empty")}</span>
+        </div>`;
+    } else if(f.key==="icon"){
+      html += `<div class="iconFieldRow">
+        <input type="text" id="f_${f.key}" name="${f.key}" value="${escapeHtml(String(val))}" maxlength="8">
+        <button type="button" class="emojiPickerBtn" id="f_${f.key}_pickerBtn" title="${escapeHtml(t("tooltip_emoji_picker"))}">😀</button>
+      </div>`;
+    } else {
+      html += `<input type="${f.type}" id="f_${f.key}" name="${f.key}" value="${escapeHtml(String(val))}" ${f.type==='number' ? 'step="any"' : ''}>`;
+    }
+    html += `</div>`;
+  });
+  html += `</div>`;
+  html += `<div id="idWarn"></div>`;
+  html += `<div class="formActions">
+      <button type="submit">${t("btn_save")}</button>
+      <button type="button" class="secondary" id="cancelBtn">${t("btn_cancel")}</button>
+      ${!isNew ? `<button type="button" class="secondary" id="formDuplicateBtn">${t("btn_duplicate")}</button>` : ""}
+      ${!isNew ? `<button type="button" class="danger" id="formDeleteBtn">${t("btn_delete")}</button>` : ""}
+    </div>`;
+  html += `</form>`;
+
+  formArea.innerHTML = html;
+
+  document.getElementById("f_id").addEventListener("input", ()=>checkIdDuplicate(kind, isNew ? null : id));
+
+  // Farbwähler <-> Text-Feld synchron halten (für alle color-text Felder)
+  fields.filter(f=>f.type==="color-text").forEach(f=>{
+    const textInput = document.getElementById("f_"+f.key);
+    const picker = document.getElementById("f_"+f.key+"_picker");
+    picker.addEventListener("input", ()=>{ textInput.value = picker.value; });
+    textInput.addEventListener("input", ()=>{
+      if(/^#[0-9a-fA-F]{6}$/.test(textInput.value)){
+        picker.value = textInput.value;
+      }
+    });
+  });
+
+  // Emoji-Picker fürs Icon-Feld (Pflanzen &amp; Bäume)
+  const iconField = fields.find(f=>f.key==="icon");
+  if(iconField){
+    const iconInput = document.getElementById("f_icon");
+    const pickerBtn = document.getElementById("f_icon_pickerBtn");
+    const rowEl = pickerBtn.closest(".iconFieldRow");
+
+    pickerBtn.addEventListener("click", ()=>{
+      const existing = rowEl.querySelector(".emojiPickerPopup");
+      if(existing){ existing.remove(); return; }
+
+      const popup = document.createElement("div");
+      popup.className = "emojiPickerPopup";
+      PLANT_TREE_EMOJIS.forEach(emoji=>{
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = emoji;
+        btn.title = emoji;
+        btn.addEventListener("click", ()=>{
+          iconInput.value = emoji;
+          popup.remove();
+          iconInput.focus();
+        });
+        popup.appendChild(btn);
+      });
+      rowEl.appendChild(popup);
+
+      // Popup schließen bei Klick außerhalb
+      const closeOnOutsideClick = (ev)=>{
+        if(!rowEl.contains(ev.target)){
+          popup.remove();
+          document.removeEventListener("click", closeOnOutsideClick);
+        }
+      };
+      // erst im nächsten Tick registrieren, sonst schließt der öffnende Klick sofort wieder
+      setTimeout(()=>document.addEventListener("click", closeOnOutsideClick), 0);
+    });
+  }
+
+  // Bild-Vorschau live aktualisieren (für alle image-path Felder)
+  fields.filter(f=>f.type==="image-path").forEach(f=>{
+    const textInput = document.getElementById("f_"+f.key);
+    const preview = document.getElementById("f_"+f.key+"_preview");
+    const hint = document.getElementById("f_"+f.key+"_previewHint");
+    updateImagePreview(textInput.value, preview, hint);
+    textInput.addEventListener("input", ()=>{
+      updateImagePreview(textInput.value, preview, hint);
+    });
+  });
+  document.getElementById("cancelBtn").addEventListener("click", closeForm);
+  document.getElementById("entryForm").addEventListener("submit", (e)=>{
+    e.preventDefault();
+    saveEntry(kind, isNew ? null : id);
+  });
+  if(!isNew){
+    document.getElementById("formDeleteBtn").addEventListener("click", ()=>deleteEntry(kind, id));
+    document.getElementById("formDuplicateBtn").addEventListener("click", ()=>duplicateEntry(kind, id));
+  }
+
+  renderLists(); // Markierung der ausgewählten Zeile aktualisieren
+}
+
+function checkIdDuplicate(kind, currentId){
+  const idVal = document.getElementById("f_id").value.trim();
+  const warnEl = document.getElementById("idWarn");
+  const list = getList(kind);
+  const exists = list.some(e => e.id === idVal && e.id !== currentId);
+  const kindLabel = kind==="plant" ? t("kind_plant_label") : t("kind_material_label");
+  warnEl.innerHTML = exists
+    ? `<div class="dupWarn">${t("dup_id_warning", { kind: escapeHtml(kindLabel) })}</div>`
+    : "";
+  return exists;
+}
+
+function closeForm(){
+  selected = null;
+  document.getElementById("formArea").innerHTML =
+    `<div class="emptyState" id="formEmptyState">${t("form_empty_state")}</div>`;
+  document.getElementById("formTitle").textContent = t("form_title_default");
+  renderLists();
+}
+
+function saveEntry(kind, originalId){
+  const fields = getFields(kind);
+  const idVal = document.getElementById("f_id").value.trim();
+
+  if(!idVal){
+    alert(t("alert_id_empty"));
+    return;
+  }
+  if(checkIdDuplicate(kind, originalId)){
+    alert(t("alert_id_duplicate"));
+    return;
+  }
+
+  // Pflanzen sind immer kreisförmig; bei Material kommt shape jetzt aus dem
+  // Formularfeld (siehe MATERIAL_FIELDS) und wird gleich beim forEach unten
+  // mit übernommen. Fallback "rect", falls das Feld ausnahmsweise fehlen sollte.
+  const newEntry = { kind, shape: kind==="plant" ? "circle" : "rect" };
+  fields.forEach(f=>{
+    const el = document.getElementById("f_"+f.key);
+    let val = el.value;
+    if(f.type==="number"){
+      newEntry[f.key] = val==="" ? "" : Number(val);
+    } else {
+      newEntry[f.key] = val;
+    }
+  });
+
+  const list = getList(kind);
+  if(originalId===null){
+    list.push(newEntry);
+  } else {
+    const idx = list.findIndex(e=>e.id===originalId);
+    list[idx] = newEntry;
+  }
+  sortByName(list);
+
+  setStatusKey("status_saved_entry", { name: newEntry.name || newEntry.id });
+  markDirty(true);
+  selected = { kind, id: newEntry.id };
+  renderLists();
+  openForm(kind, newEntry.id);
+}
+
+function makeUniqueDuplicateId(kind, baseId){
+  // Hängt eine Zahl an die id an (id2, id3, ...), bis eine freie id gefunden
+  // ist. Falls die id bereits selbst auf eine Zahl endet (z.B. "tomate3"),
+  // wird trotzdem einfach weitergezählt ("tomate3" -> "tomate4"), das bleibt
+  // eindeutig und ist am wenigsten überraschend.
+  const list = getList(kind);
+  const existingIds = new Set(list.map(e=>e.id));
+  let counter = 2;
+  let candidate = baseId + counter;
+  while(existingIds.has(candidate)){
+    counter++;
+    candidate = baseId + counter;
+  }
+  return candidate;
+}
+
+function duplicateEntry(kind, id){
+  const list = getList(kind);
+  const original = list.find(e=>e.id===id);
+  if(!original) return;
+
+  const copy = { ...original };
+  copy.id = makeUniqueDuplicateId(kind, original.id);
+
+  list.push(copy);
+  sortByName(list);
+
+  setStatusKey("status_duplicated_entry", { name: original.name || original.id });
+  markDirty(true);
+  selected = { kind, id: copy.id };
+  renderLists();
+  openForm(kind, copy.id);
+}
+
+function deleteEntry(kind, id){
+  const list = getList(kind);
+  const entry = list.find(e=>e.id===id);
+  if(!entry) return;
+  if(!confirm(t("confirm_delete_entry", { name: entry.name || id }))) return;
+
+  const idx = list.findIndex(e=>e.id===id);
+  list.splice(idx, 1);
+
+  if(selected && selected.kind===kind && selected.id===id){
+    closeForm();
+  } else {
+    renderLists();
+  }
+  setStatusKey("status_deleted_entry", { name: entry.name || id });
+  markDirty(true);
+}
+
+/* ==================================================================
+   Export
+================================================================== */
+document.getElementById("exportBtn").addEventListener("click", ()=>{
+  // Doppelte ids über beide Listen hinweg nochmal global prüfen
+  const plantIds = plants.map(p=>p.id);
+  const materialIds = materials.map(m=>m.id);
+  const dupPlants = plantIds.filter((id,i)=>plantIds.indexOf(id)!==i);
+  const dupMaterials = materialIds.filter((id,i)=>materialIds.indexOf(id)!==i);
+
+  if(dupPlants.length || dupMaterials.length){
+    alert(t("alert_duplicate_ids_on_export", {
+      ids: [...new Set([...dupPlants,...dupMaterials])].join(", ")
+    }));
+    return;
+  }
+
+  const header = originalHeaderComment || DEFAULT_HEADER_COMMENT;
+  const output = buildFileText(header);
+
+  const blob = new Blob([output], {type:"text/javascript"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = currentFileName;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  setStatusKey("status_export_js_done", { name: currentFileName });
+  markDirty(false);
+});
+
+/* ==================================================================
+   CSV-Export (Pflanzen + Material zusammen, Pipe-getrennt)
+================================================================== */
+document.getElementById("exportCsvBtn").addEventListener("click", ()=>{
+  const csvText = buildCsvText();
+  const blob = new Blob(["\uFEFF" + csvText], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = csvExportFileName();
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatusKey("status_export_csv_done");
+});
+
+// Leitet den Download-Namen fuer den CSV-Export aus dem zuletzt geladenen
+// Dateinamen ab (z.B. "pflanzen_en_demo.js" -> "pflanzen_en_demo.csv").
+// Ohne vorheriges Laden (currentFileName leer) bleibt der bisherige
+// Standardname erhalten.
+function csvExportFileName(){
+  if(!currentFileName) return "pflanzen_datenbank.csv";
+  return currentFileName.replace(/\.js$/i, "") + ".csv";
+}
+
+function csvEscapeField(value){
+  // Pipe als Trennzeichen -> Feld-Inhalte mit | müssen escaped werden.
+  // Zusätzlich Zeilenumbrüche in Notiz-Feldern durch Leerzeichen ersetzen,
+  // damit jede Zeile in der CSV eine Zeile bleibt.
+  let str = String(value ?? "");
+  str = str.replace(/\r?\n/g, " ");
+  if(str.includes("|")){
+    str = str.replace(/\|/g, "/");
+  }
+  return str;
+}
+
+function buildCsvText(){
+  // Spaltenvereinigung aus Pflanzen- und Material-Feldern (Reihenfolge: erst
+  // alle Pflanzen-Spalten, dann zusätzliche Material-Spalten, die es bei
+  // Pflanzen nicht gibt). Zusätzlich vorne eine "typ"-Spalte zur Unterscheidung.
+  const seen = new Set();
+  const columns = [];
+  [...PLANT_FIELDS, ...MATERIAL_FIELDS].forEach(f=>{
+    if(!seen.has(f.key)){
+      seen.add(f.key);
+      columns.push(f.key);
+    }
+  });
+
+  const headerRow = ["typ", ...columns].join("|");
+
+  const plantRows = plants.map(entry=>{
+    const cells = columns.map(key=>csvEscapeField(entry[key]));
+    return ["pflanze", ...cells].join("|");
+  });
+
+  const materialRows = materials.map(entry=>{
+    const cells = columns.map(key=>csvEscapeField(entry[key]));
+    return ["material", ...cells].join("|");
+  });
+
+  return [headerRow, ...plantRows, ...materialRows].join("\n");
+}
+
+function buildFileText(header){
+  const plantsBlock = stringifyEntries(plants, PLANT_FIELDS);
+  const materialsBlock = stringifyEntries(materials, MATERIAL_FIELDS);
+
+  return `${header}
+
+// -------------------- PFLANZEN --------------------
+// shape:"circle" -> Kreis-Durchmesser wird aus plantSpacing/rowSpacing
+// automatisch berechnet (Mittelwert, falls Bereich angegeben).
+const PLANTS_DATA = [
+${plantsBlock}
+];
+
+// -------------------- BAUMATERIAL (Wege & Mauern) --------------------
+// shape:"rect" -> widthCm x heightCm werden direkt verwendet (kein Mittelwert).
+// shape:"circle" -> Durchmesser kommt aus diameterCm, ersatzweise widthCm
+// (z.B. für runde Trittsteine oder runde Beet-Einfassungen).
+// pattern (optional) -> Name eines <pattern>, das im SVG als Füllung dient
+// (pavePattern, brickPattern, grassPattern).
+const MATERIALS_DATA = [
+${materialsBlock}
+];
+`;
+}
+
+function stringifyEntries(list, fields){
+  const orderedKeys = ["id","kind","shape", ...fields.map(f=>f.key).filter(k=>k!=="id")];
+  return list.map(entry=>{
+    const parts = [];
+    orderedKeys.forEach(key=>{
+      if(!(key in entry)) return;
+      const val = entry[key];
+      if(val === "" || val === undefined) return; // leere optionale Felder weglassen
+      if(typeof val === "number"){
+        parts.push(`${key}:${val}`);
+      } else {
+        parts.push(`${key}:${JSON.stringify(val)}`);
+      }
+    });
+    return "  {\n    " + wrapParts(parts) + "\n  }";
+  }).join(",\n");
+}
+
+function wrapParts(parts){
+  // einfache Zeilenumbrüche alle ~4 Felder, damit die Datei lesbar bleibt
+  const lines = [];
+  let current = [];
+  parts.forEach((p,i)=>{
+    current.push(p);
+    if(current.length===4 || i===parts.length-1){
+      lines.push(current.join(", "));
+      current = [];
+    }
+  });
+  return lines.join(",\n    ");
+}
+</script>
+</body>
+</html>

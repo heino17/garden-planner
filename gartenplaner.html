@@ -1,0 +1,3280 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="copyright" content="2026 - heino17" />
+<title>Julia's Gartenplaner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --color-soil-dark:#4a3a2a;
+    --color-soil:#6b4a34;
+    --color-leaf:#3f6b3b;
+    --color-leaf-dark:#2c4c2a;
+    --color-flag:#f2ede0;
+    --color-flag-dark:#d8d0b8;
+    --color-sage:#8fa982;
+    --color-canvas:#d9cfa8;
+    --color-canvas-line: rgba(74,58,42,0.3);
+    --color-grid-line: rgba(74,58,42,0.3); /* wird per JS passend zur Hintergrundfarbe aktualisiert */
+    --color-sidebar:#f2ede0;
+    --color-card:#fffdf7;
+    --color-clay:#a8502b;
+    --color-ink:#2c2620;
+    --font-heading: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    --font-body: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--color-soil-dark);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    overflow: hidden; /* verhindert, dass die ganze Seite scrollt und die Leiste mitreißt */
+  }
+  body{
+    display:flex;
+    flex-direction:column;
+  }
+
+  header{
+    background: var(--color-soil-dark);
+    color: #f2ede0;
+    padding: 14px 20px;
+    display:flex;
+    align-items:center;
+    gap:20px;
+    flex-wrap: wrap;
+    border-bottom: 3px solid var(--color-leaf);
+    flex: 0 0 auto; /* behält immer seine natürliche Höhe, egal wie viele Zeilen er umbricht */
+  }
+
+  .title-group{
+    display:flex;
+    flex-direction:column;
+    gap:1px;
+  }
+  header h1{
+    font-family: var(--font-heading);
+    font-size: 22px;
+    margin:0;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  header h1 .h1-accent{ color: var(--color-sage); }
+  #titleShort .h1-suffix{ color: #8FA982; }
+  .slogan{
+    margin:0 0 0 20px;
+    font-size: 11.5px;
+    color: var(--color-flag-dark);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  /* Kopfzeile einklappen: bed-controls verschwindet, ebenso die
+     Hintergrundfarbe/Rasterlinien-Buttons (canvas-style-controls) -
+     zoom-controls selbst bleibt sichtbar, da Zoomen auch im schmalen
+     Header nützlich bleibt.
+     Der Titel schrumpft von "Julia's Gartenplaner" auf "Gartenplaner".
+     Die restlichen Buttons (Undo/Redo, Datei, Fähnchen) bleiben sichtbar -
+     nur das Nice-to-have für schmalere Fenster verschwindet.
+     Zusätzlich wird die title-group um 20% verkleinert (Schrift, Abstand,
+     Padding), damit der eingeklappte Header spürbar niedriger wirkt. */
+  header.collapsed .bed-controls,
+  header.collapsed .canvas-style-controls,
+  header.collapsed .lang-controls{ display:none; }
+  header.collapsed h1 .h1-full{ display:none; }
+  header.collapsed .slogan{ display:none; }
+  header.collapsed{ padding: 3.2px 20px; } /* bisheriges collapsed-Padding (4px) nochmal um 20% reduziert */
+  header.collapsed h1{ font-size: 17.6px; margin: 2px 0; } /* 22px * 0.8, 2-3px Luft ober-/unterhalb */
+  header.collapsed .title-group{ gap: 0.8px; } /* 1px * 0.8 */
+  header.collapsed button.tool-btn{ padding: 6.4px 11.2px; font-size: 10.4px; } /* 8px/14px/13px * 0.8 */
+
+  .bed-controls{
+    display:flex; align-items:center; gap:8px; font-size:13px;
+  }
+  .bed-controls label{ display:flex; align-items:center; gap:4px; }
+  .bed-controls input{
+    width:70px; padding:4px 6px; border-radius:4px; border:1px solid #7a6a52;
+    font-family: var(--font-mono); font-size:13px;
+    background:#fffdf7;
+  }
+
+  .zoom-controls{
+    display:flex; align-items:center; gap:8px; font-size:13px;
+    margin-left: 12px;
+  }
+  .zoom-controls label{ font-size:15px; opacity:0.85; cursor:default; }
+  .zoom-controls input[type=range]{
+    width: 110px;
+    accent-color: var(--color-sage);
+    cursor:pointer;
+  }
+  #zoomLabel{
+    font-family: var(--font-mono);
+    font-size:12.5px;
+    min-width: 42px;
+    text-align:right;
+    color:#d8d0b8;
+  }
+  .canvas-style-controls{
+    display:flex; align-items:center; gap:8px;
+  }
+  #canvasBgInput{
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+  }
+  #canvasBgInput::-webkit-color-swatch-wrapper{ padding: 2px; }
+  #canvasBgInput::-webkit-color-swatch{ border: 1px solid rgba(0,0,0,0.25); border-radius: 3px; }
+  #canvasBgInput::-moz-color-swatch{ border: 1px solid rgba(0,0,0,0.25); border-radius: 3px; }
+
+  button.tool-btn:disabled{
+    opacity:0.4;
+    cursor:not-allowed;
+  }
+  button.tool-btn:disabled:hover{ background: var(--color-leaf); }
+
+  .history-controls{ display:flex; gap:8px; margin-left:auto; }
+
+  .lang-controls{ display:flex; align-items:center; }
+  #langSelect{
+    background: var(--color-leaf);
+    color:#fff;
+    border:none;
+    padding:8px 10px;
+    border-radius:5px;
+    font-size:13px;
+    font-family: var(--font-body);
+    cursor:pointer;
+  }
+  #langSelect:hover{ background: var(--color-leaf-dark); }
+
+  .file-controls{ display:flex; gap:8px; }
+  button.tool-btn{
+    background: var(--color-leaf);
+    color:#fff;
+    border:none;
+    padding:8px 14px;
+    border-radius:5px;
+    font-size:13px;
+    font-family: var(--font-body);
+    cursor:pointer;
+    transition: background 0.15s ease;
+  }
+  button.tool-btn:hover{ background: var(--color-leaf-dark); }
+  button.tool-btn.danger{ background: var(--color-clay); }
+  button.tool-btn.danger:hover{ background:#7d3c1f; }
+  button.tool-btn.active{ background: var(--color-sage); color:#20301f; }
+  button.tool-btn.active:hover{ background: var(--color-sage); filter:brightness(1.08); }
+
+  main{
+    display:flex;
+    flex: 1 1 auto;   /* füllt automatisch den Rest, egal wie hoch der Header gerade ist
+                         (vorher: calc(100vh - 64px), das bei umbrechendem Header nicht
+                         mehr stimmte und den unteren Teil des Gartens abschnitt) */
+    min-height: 0;    /* wichtig für Flex-Kinder mit eigenem overflow, sonst schiebt sich
+                         der Inhalt trotzdem über den verfügbaren Platz hinaus */
+  }
+
+  /* ---------- Sidebar ---------- */
+  /* sidebar-shell umschließt die aside NUR fürs Positionieren des
+     Fähnchen-Buttons (braucht position:relative + overflow:visible,
+     was die aside selbst wegen ihres eigenen Scroll-Overflows nicht
+     leisten kann). Die eigentliche Breiten-/Collapse-Logik bleibt
+     hier, wird aber jetzt auf die shell statt auf die aside gelegt. */
+  .sidebar-shell{
+    position:relative;
+    width: clamp(220px, 22vw, 280px);
+    flex: 0 0 clamp(220px, 22vw, 280px); /* schrumpft sanft mit der Fensterbreite,
+                                            aber nie unter 220px - darunter würden
+                                            Karten/Buttons zu eng werden */
+    display:flex;
+    transition: flex-basis 0.2s ease, width 0.2s ease;
+  }
+  .sidebar-shell.collapsed{
+    width: 0;
+    flex: 0 0 0;
+  }
+  aside{
+    width:100%;
+    flex: 1 1 auto;
+    background: var(--color-sidebar);
+    border-right: 3px solid var(--color-soil);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;       /* Leiste selbst scrollt nie horizontal mit */
+  }
+  .sidebar-shell.collapsed aside{
+    border-right: none;
+  }
+
+  /* Fähnchen: hängt am oberen rechten Rand der Sidebar und ragt zur
+     Hälfte über die Trennlinie in den Gartenbereich hinein - bleibt
+     dadurch auch im eingeklappten Zustand sichtbar (shell ist dann
+     0px breit, das Fähnchen "klebt" an derselben Stelle weiter). */
+  .sidebar-flag{
+    position:absolute;
+    top:12px;
+    right:0;
+    transform: translateX(50%);
+    z-index:5;
+    background: var(--color-flag);
+    color: var(--color-soil-dark);
+    border:none;
+    border-radius: 0 6px 6px 0;
+    padding:9px 10px 9px 8px;
+    font-size:15px;
+    cursor:pointer;
+    box-shadow: 2px 2px 7px rgba(0,0,0,0.3);
+    transition: background 0.15s ease;
+  }
+  .sidebar-flag:hover{ background: var(--color-flag-dark); }
+  .sidebar-head{
+    padding: 12px 14px 8px;
+  }
+  .search-row{
+    position:relative;
+    display:flex;
+    align-items:center;
+  }
+  .search-row input[type=text]{
+    width:100%;
+    padding: 7px 30px 7px 10px;
+    border:1px solid #b9ac8c;
+    border-radius:5px;
+    font-size:13px;
+    font-family: var(--font-body);
+  }
+  .search-clear-btn{
+    position:absolute;
+    right:4px;
+    width:22px;
+    height:22px;
+    border:none;
+    background:transparent;
+    color:#8a7c5f;
+    font-size:15px;
+    line-height:1;
+    cursor:pointer;
+    border-radius:50%;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .search-clear-btn:hover{
+    background:#e3d9bf;
+    color:#4a4030;
+  }
+  .search-row.has-value .search-clear-btn{ display:flex; }
+  .plant-list{
+    flex:1;
+    min-height: 100px;   /* garantiert Restplatz für die Liste, auch wenn das
+                            Detail-Panel bei kurzen Fenstern viel beansprucht */
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding: 4px 10px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .list-heading{
+    font-family: var(--font-heading);
+    font-size:13px;
+    color:#6b5f4a;
+    margin: 10px 2px 2px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    cursor:pointer;
+    user-select:none;
+    padding:4px 2px;
+    border-radius:4px;
+    position: sticky;
+    top: var(--sticky-offset, 0px);
+    background: var(--color-sidebar);
+    z-index: 2;
+  }
+  .list-heading:hover{ background:#e9e0c8; }
+  .list-heading:first-child{ margin-top:2px; }
+  .list-heading .caret{
+    display:inline-block;
+    transition: transform 0.15s ease;
+    font-size:11px;
+  }
+  .list-heading.collapsed .caret{ transform: rotate(-90deg); }
+  .list-heading .heading-label{ flex:1; }
+  .list-heading .heading-count{
+    font-family: var(--font-body);
+    font-size:11px;
+    font-weight:normal;
+    text-transform:none;
+    letter-spacing:normal;
+    color:#8a7c5f;
+  }
+  .list-group-body{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .list-group-body.collapsed{ display:none; }
+
+  .plant-card{
+    background: var(--color-card);
+    border: 1px solid #cfc3a2;
+    border-left: 6px solid var(--card-accent, var(--color-leaf));
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: grab;
+    user-select:none;
+    touch-action:none;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .plant-card:active{ cursor:grabbing; }
+  .plant-card .icon{
+    font-size:20px; line-height:1;
+    width:24px; height:24px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .item-visual-img{
+    object-fit: contain;
+    vertical-align: middle;
+    display:inline-block;
+  }
+  .plant-card .info{ flex:1; min-width:0; }
+  .plant-card .name{ font-weight:600; font-size:13.5px; }
+  .plant-card .meta{
+    font-family: var(--font-mono);
+    font-size:11px;
+    color:#6b5f4a;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  .fill-btn{
+    flex-shrink:0;
+    width:26px; height:26px;
+    border:1px solid #b9ac8c;
+    background:#fff;
+    border-radius:5px;
+    cursor:pointer;
+    font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+    color:#6b5f4a;
+    touch-action:manipulation;
+  }
+  .fill-btn:hover{ background:#f0ead8; }
+  .plant-card.armed{
+    outline: 2px solid var(--color-clay);
+    outline-offset: 1px;
+  }
+  .plant-card.armed .fill-btn{
+    background: var(--color-clay);
+    color:#fff;
+    border-color: var(--color-clay);
+  }
+  .plant-card.active-card{
+    background: #f2ecd8;
+    border-color: var(--card-accent, var(--color-leaf));
+    box-shadow: 0 0 0 2px var(--card-accent, var(--color-leaf)) inset;
+  }
+
+  .detail-panel{
+    border-top: 2px solid var(--color-soil);
+    background:#eae2c8;
+    padding: 10px 14px 14px;
+    font-size:12.5px;
+    max-height: 40%;
+    overflow-y:auto;
+    overflow-x:hidden;
+  }
+  /* Bei geringer Fensterhöhe (z.B. Tablet quer) darf das Detail-Panel
+     nicht mehr so viel Platz beanspruchen wie auf einem hohen Desktop-
+     Fenster, sonst bleibt der Pflanzenliste kaum noch Raum. */
+  @media (max-height: 700px){
+    .detail-panel{ max-height: 28%; }
+  }
+  .detail-panel h3{
+    margin: 0 0 4px; font-family: var(--font-heading); font-size:16px;
+  }
+  .detail-panel .lat{ font-style:italic; color:#5a4f3b; margin-bottom:6px; }
+  .detail-panel dl{ margin:0; }
+  .detail-panel dt{ font-family: var(--font-mono); font-size:10.5px; text-transform:uppercase; color:#7a6a4e; margin-top:6px; }
+  .detail-panel dd{ margin:1px 0 0; }
+  .detail-panel .empty-hint{ color:#8a7d63; font-style:italic; }
+
+  /* ---------- Garden area ---------- */
+  section.garden-wrap{
+    flex: 1 1 auto;
+    min-width: 0;          /* WICHTIG: sonst sprengt das große SVG den Flex-Container
+                               und die ganze Seite (inkl. Sidebar) scrollt mit */
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    background: var(--color-soil-dark);
+    overflow:hidden;
+  }
+  .selection-bar{
+    background:#2c2620;
+    color:#f2ede0;
+    font-size:13px;
+    padding: 7px 20px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-height: 36px;
+    flex: 0 0 auto;
+  }
+  .selection-bar .hint{ color:#cfc9b8; opacity:0.8; }
+  .selection-bar button{
+    background: var(--color-clay); color:#fff; border:none;
+    padding:4px 10px; border-radius:4px; cursor:pointer; font-size:12px;
+  }
+  /* Ebenen-/Sperren-Buttons: neutraler als der rote "Entfernen"-Button,
+     da es sich um reine Anordnungs-Aktionen ohne destruktive Wirkung handelt. */
+  .selection-bar button[id="sendBackBtn"],
+  .selection-bar button[id="moveBackwardBtn"],
+  .selection-bar button[id="moveForwardBtn"],
+  .selection-bar button[id="bringFrontBtn"],
+  .selection-bar button[id="toggleLockBtn"]{
+    background: var(--color-leaf);
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+  .selection-bar button[id="sendBackBtn"]:hover,
+  .selection-bar button[id="moveBackwardBtn"]:hover,
+  .selection-bar button[id="moveForwardBtn"]:hover,
+  .selection-bar button[id="bringFrontBtn"]:hover,
+  .selection-bar button[id="toggleLockBtn"]:hover{
+    background: var(--color-leaf-dark);
+  }
+  .fill-lock-toggle{
+    display:flex; align-items:center; gap:5px;
+    font-size:13px; color:#cfc9b8; cursor:pointer;
+  }
+  .fill-lock-toggle input{ cursor:pointer; }
+
+  .canvas-scroll{
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;        /* hier und NUR hier wird gescrollt */
+    display:flex;
+    align-items:flex-start;
+    justify-content:flex-start;
+    padding: 24px;
+  }
+
+  svg.bed{
+    background: var(--color-canvas);
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    touch-action:none;
+    flex-shrink:0;
+    /* Verhindert, dass Chrome die <text>-Icons (z.B. 🧅) beim Ctrl+Ziehen
+       (Marquee-Auswahl) oder beim Verschieben als Fließtext markiert - das
+       zeigte sich als blau unterlegte Icons und störte das Pointer-Dragging.
+       Firefox war hier tolerant, Chrome nicht. */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+  }
+  svg.bed.fill-armed{ cursor: crosshair; }
+  svg.bed{ cursor: grab; }
+  svg.bed.panning{ cursor: grabbing; }
+  svg.bed.fill-armed.panning{ cursor: crosshair; } /* fill-armed hat Vorrang, panning kommt hier eh nicht vor */
+  svg.bed.ctrl-armed{ cursor: crosshair; } /* Strg gedrückt: Fadenkreuz zeigt Marquee-Auswahl an */
+  svg.bed.fill-armed.ctrl-armed{ cursor: crosshair; } /* fill-armed hat weiterhin Vorrang (gleicher Cursor) */
+
+  /* Marquee-Auswahlrechteck (Strg/Shift + Ziehen auf leerem Hintergrund) */
+  .marquee-rect{
+    fill: rgba(143,169,130,0.18);
+    stroke: var(--color-sage);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 3;
+    pointer-events: none;
+  }
+
+  /* Maß-Anzeige beim Aufziehen einer Flächenfüllung (Breite×Höhe + Stückzahl) */
+  .measure-label-bg{
+    fill: var(--color-soil-dark);
+    fill-opacity: 0.88;
+    pointer-events: none;
+  }
+  .measure-label-text{
+    fill: #f2ede0;
+    font-family: var(--font-mono);
+    pointer-events: none;
+    dominant-baseline: alphabetic;
+  }
+
+  .plant-mark circle, .plant-mark rect{ stroke-width:1.5; cursor:grab; }
+  .plant-mark:active circle, .plant-mark:active rect{ cursor:grabbing; }
+  /* Gesperrte Objekte: weder greifbar noch verschiebbar - der Cursor signalisiert
+     das direkt beim Hover, statt das Objekt optisch zu verändern (bewusst kein
+     Dimmen/Icon, damit die Fläche nicht "kaputt" aussieht). */
+  .plant-mark.locked circle, .plant-mark.locked rect{ cursor: not-allowed; }
+  .plant-mark text{
+    font-family: var(--font-body);
+    text-anchor:middle;
+    dominant-baseline: middle;
+    pointer-events:none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+  }
+  .plant-mark image{ pointer-events:none; }
+  .plant-mark.selected circle,
+  .plant-mark.selected rect{ stroke: #fff; stroke-width:3; stroke-dasharray:4 3; }
+
+  /* Notizzettel: kleine Klebezettel, frei platzierbar */
+  .note-mark{ cursor: grab; }
+  .note-mark:active{ cursor: grabbing; }
+  .note-mark .note-body{
+    filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.25));
+  }
+  .note-mark.selected .note-body{ stroke: #fff; stroke-width:3; stroke-dasharray:4 3; }
+  .note-mark .note-textarea{
+    width:100%; height:100%;
+    box-sizing: border-box;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-family: var(--font-body);
+    font-size: 11px; /* Fallback - wird pro Notiz per inline-style überschrieben */
+    color: #4a3a2a; /* Fallback - wird pro Notiz per inline-style überschrieben */
+    padding: 5px 7px 6px;
+    line-height: 1.3;
+    cursor: text;
+  }
+  .note-mark .note-textarea:focus{ outline: none; }
+  .note-mark .note-drag-handle{
+    fill: rgba(0,0,0,0.06);
+    cursor: grab;
+  }
+  .note-mark:active .note-drag-handle{ cursor: grabbing; }
+  .note-mark .note-delete-btn{ cursor: pointer; }
+  .note-mark .note-delete-btn circle{ fill: rgba(0,0,0,0.15); }
+  .note-mark .note-delete-btn text{
+    fill: #4a3a2a;
+    font-family: var(--font-body);
+    font-size: 11px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    user-select: none;
+  }
+  .note-mark .note-delete-btn:hover circle{ fill: rgba(168,80,43,0.55); }
+  .note-mark .note-style-btn{ cursor: pointer; }
+  .note-mark .note-style-btn circle{ fill: rgba(0,0,0,0.15); }
+  .note-mark .note-style-btn text{
+    font-size: 9px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    user-select: none;
+  }
+  .note-mark .note-style-btn:hover circle{ fill: rgba(0,0,0,0.3); }
+  .note-mark .note-resize-handle{
+    fill: #d8c460;
+    cursor: nwse-resize;
+  }
+
+  /* Popover zum Stylen eines Notizzettels (Hintergrund/Text/Schriftgröße).
+     Liegt außerhalb des SVG als normales HTML-Element, per position:fixed
+     direkt am Style-Knopf des jeweiligen Zettels platziert - so lassen sich
+     ganz normale <input type="color/range"> nutzen statt sie mühsam in SVG
+     nachzubauen. */
+  .note-style-popover{
+    position: fixed;
+    z-index: 500;
+    background: #2c2620;
+    border: 1px solid var(--color-flag-dark);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: #f2ede0;
+  }
+  .note-style-popover[hidden]{ display: none; }
+  /* Hintergrundbild-Popover nutzt dieselbe Optik, enthält aber Buttons
+     statt Farbwähler/Schieberegler - eigenes Styling dafür. */
+  #bgImagePopover button{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-leaf);
+    color: #fff;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #bgImagePopover button:hover{ background: var(--color-leaf-dark); }
+  #bgImagePopover button:disabled{ opacity: 0.4; cursor: not-allowed; background: var(--color-leaf); }
+  #bgImageChooseLabel, #bgImageRemoveLabel{ color: #fff; }
+  .note-style-popover label{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .note-style-popover input[type="range"]{ width: 90px; }
+  .note-style-popover span:last-child{ min-width: 32px; text-align: right; color: #cfc9b8; font-size: 12px; }
+
+  /* Rechtsklick-Kontextmenü für Objekte im Raster (Sperren, Ebenen-Reihenfolge).
+     Bewusst als generische Liste angelegt statt fest verdrahtet, damit sich
+     später weitere Aktionen ergänzen lassen. */
+  .context-menu{
+    position: fixed;
+    z-index: 600;
+    background: var(--color-card);
+    border: 1px solid var(--color-flag-dark);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--color-ink);
+    min-width: 190px;
+  }
+  .context-menu[hidden]{ display: none; }
+  .context-menu button{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+  .context-menu button:hover{ background: var(--color-sidebar); }
+  .context-menu button:disabled{ opacity: 0.4; cursor: not-allowed; }
+  .context-menu button:disabled:hover{ background: none; }
+  .context-menu hr{
+    border: none;
+    border-top: 1px solid var(--color-flag-dark);
+    margin: 4px 2px;
+  }
+
+  .drag-ghost{
+    position:fixed;
+    pointer-events:none;
+    z-index:999;
+    padding:6px 10px;
+    background: var(--color-card);
+    border:1px solid var(--color-leaf);
+    border-radius:5px;
+    font-size:13px;
+    display:flex; align-items:center; gap:6px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    opacity:0.92;
+  }
+
+  footer{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background: var(--color-soil-dark);
+    color:#a99887;
+    font-size:11.5px;
+    padding: 6px 16px;
+    border-top: 1px solid #5a4630;
+  }
+  footer .footer-left{ flex:3 0 auto; text-align:left; }
+  footer .footer-center{ flex:3 0 auto; text-align:center; }
+  footer .footer-right{ flex:3 0 auto; text-align:right; }
+
+  .credits-link{
+    position:relative;
+    color:#a99887;
+    text-decoration:underline dotted;
+    cursor:help;
+  }
+  .credits-link:hover{ color:#d8d0b8; }
+  .credits-link::after{
+    content: attr(data-tooltip);
+    position:absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    width: max-content;
+    max-width: 300px;
+    background: var(--color-soil-dark);
+    color:#e8e0cc;
+    border: 1px solid #5a4630;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size:11.5px;
+    line-height:1.4;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    opacity:0;
+    visibility:hidden;
+    transition: opacity 0.15s ease;
+    pointer-events:none;
+    z-index: 10;
+  }
+  .credits-link:hover::after{
+    opacity:1;
+    visibility:visible;
+  }
+  /* Bei schmaleren Fenstern: Button-Beschriftungen ausblenden, nur Icons
+     zeigen (Tooltip via title-Attribut übernimmt die Erklärung) - so
+     bricht der Header weniger schnell in mehrere Zeilen um.
+     PS: Button-Beschriftungen vorerst absichtlich rausgenommen, tooltips reichen aus! */
+  @media (max-width: 980px){
+    .btn-label{ display:none; }
+    button.tool-btn{ padding: 8px 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-group">
+    <h1>🌱 <span class="h1-full" id="titleFull">Julia's </span><span id="titleShort">Gartenplaner</span></h1>
+    <p class="slogan" id="sloganText">Pflanzendatenbank und Gartenraster</p>
+  </div>
+  <div class="bed-controls">
+    <label><span id="bedWidthLabel">Gartenbreite</span> <input type="number" id="bedWidthInput" value="1000" min="0" step="50"> cm</label>
+    <label><span id="bedHeightLabel">Gartenlänge</span> <input type="number" id="bedHeightInput" value="1000" min="0" step="50"> cm</label>
+  </div>
+  <div class="zoom-controls">
+    <label for="zoomRange">🔍</label>
+    <input type="range" id="zoomRange" min="10" max="500" step="5" value="100">
+    <span id="zoomLabel">100%</span>
+  </div>
+  <div class="canvas-style-controls">
+    <input type="color" id="canvasBgInput" value="#d9cfa8" title="Hintergrund des Rasters">
+    <button class="tool-btn" id="toggleGridBtn" title="Rasterlinien ein-/ausblenden">▦ <span class="btn-label"> </span></button>
+    <button class="tool-btn" id="bgImageBtn" title="Hintergrundbild">🖼️ <span class="btn-label"> </span></button>
+  </div>
+  <div class="history-controls">
+    <button class="tool-btn" id="undoBtn" title="Rückgängig (Strg+Z)">↶ <span class="btn-label"> </span></button>
+    <button class="tool-btn" id="redoBtn" title="Wiederherstellen (Strg+Y)">↷ <span class="btn-label"> </span></button>
+  </div>
+  <div class="file-controls">
+    <button class="tool-btn" id="addNoteBtn" title="">📝 <span class="btn-label"> </span></button>
+    <button class="tool-btn" id="saveBtn" title="Speichern">💾 <span class="btn-label"> </span></button>
+    <button class="tool-btn" id="loadBtn" title="Laden">📂 <span class="btn-label"> </span></button>
+    <button class="tool-btn" id="exportPngBtn" title="Als PNG exportieren">🖼️ <span class="btn-label"> </span></button>
+    <button class="tool-btn" id="openDbEditorBtn" title="Pflanzendatenbank bearbeiten">🌿 <span class="btn-label"> </span></button>
+    <input type="file" id="loadFileInput" accept="application/json,.json" hidden>
+  </div>
+  <div class="lang-controls">
+    <select id="langSelect" title="Sprache wählen">
+      <option value="de">🇩🇪 Deutsch</option>
+      <option value="en">🇺🇸 American</option>
+      <option value="ru">🇷🇺 Русский</option>
+      <option value="es">🇪🇸 Español</option>
+      <option value="fr">🇫🇷 Francés</option>
+      <option value="ja">🇯🇵 日本語</option>
+      <option value="ko">🇰🇷 한국어</option>
+      <option value="zh_CN">🇨🇳 简体中文</option>
+    </select>
+  </div>
+  <button class="tool-btn" id="headerToggleBtn" title="Kopfzeile einklappen"><span id="headerToggleIcon">⌃</span> <span class="btn-label"> </span></button>
+</header>
+
+<main>
+  <div class="sidebar-shell" id="sidebarShell">
+    <aside>
+      <div class="sidebar-head">
+        <div class="search-row" id="searchRow">
+          <input type="text" id="searchInput" placeholder="Suchen …">
+          <button type="button" class="search-clear-btn" id="searchClearBtn" title="Suche leeren">✕</button>
+        </div>
+      </div>
+      <div class="plant-list" id="plantList"></div>
+      <div class="detail-panel" id="detailPanel">
+        <div class="empty-hint" id="detailEmptyHint">Klick auf einen Eintrag links für Details, oder zieh ihn in den Garten →</div>
+      </div>
+    </aside>
+    <button class="sidebar-flag" id="sidebarToggleBtn" title="Seitenleiste ein-/ausblenden">☰</button>
+  </div>
+
+  <section class="garden-wrap">
+    <div class="selection-bar" id="selectionBar">
+      <span class="hint">Nichts ausgewählt — ziehe etwas aus der Liste in den Garten.</span>
+    </div>
+    <div class="canvas-scroll">
+      <svg class="bed" id="bedSvg"></svg>
+    </div>
+  </section>
+</main>
+
+<div class="note-style-popover" id="noteStylePopover" hidden>
+  <label>🎨 <span id="noteStyleBgLabel"></span>
+    <input type="color" id="noteStyleBgInput">
+  </label>
+  <label>🖋️ <span id="noteStyleColorLabel"></span>
+    <input type="color" id="noteStyleColorInput">
+  </label>
+  <label>🔠 <span id="noteStyleFontLabel"></span>
+    <input type="range" id="noteStyleFontInput" min="8" max="24" step="1">
+    <span id="noteStyleFontValue">11px</span>
+  </label>
+</div>
+
+<div class="context-menu" id="objectContextMenu" hidden></div>
+
+<div class="note-style-popover" id="bgImagePopover" hidden>
+  <button id="bgImageChooseBtn">🖼️ <span id="bgImageChooseLabel"></span></button>
+  <button id="bgImageToggleBtn">👁️ <span id="bgImageToggleLabel"></span></button>
+  <button id="bgImageRemoveBtn">🗑️ <span id="bgImageRemoveLabel"></span></button>
+</div>
+<input type="file" id="bgImageFileInput" accept="image/*" hidden>
+
+<footer>
+  <div class="footer-left">(c) 2026 <a style="color: #a99887 !important;" target="_blank" href="https://github.com/heino17/garden-planner">heino17</a></div>
+  <div class="footer-center" id="footerScaleText">Maßstab: 1 Kachel im Garten = 100 cm. Reihen-/Pflanzabstände aus der Gemüse-Tabelle</div>
+  <div class="footer-right"><a href="#" class="credits-link" id="footerCreditsLink" data-tooltip="Diese Anwendung wurde im Auftrag zu 100% von Anthropic's Claude.ai, in einem kostenlosen Konto erstellt. Ganz erstaunlich! 🧚🏻‍♀️" onclick="return false;">Credits</a></div>
+</footer>
+
+<!-- Pflanzen- und Material-Daten: ausgelagert, damit sie separat gepflegt werden können.
+     Als .js statt .json eingebunden, damit es auch unter file:// ohne CORS-Probleme läuft. -->
+<script src="pflanzen.js"></script>
+<!-- Sprachdatei: gleiches Prinzip, .js statt .json/.yml + fetch wegen file://-CORS. -->
+<script src="gartenplaner_lang.js"></script>
+
+<script>
+(function(){
+
+  /* ---------------------------------------------------------------
+     1) ITEM-KATALOG (Pflanzen + Baumaterial zusammenführen)
+  ----------------------------------------------------------------*/
+
+  // Zahl(en) aus einem Text wie "40-50 (50-60)" extrahieren und mitteln.
+  function parseSpacingCm(str){
+    if(!str) return null;
+    const nums = (String(str).match(/\d+(?:[.,]\d+)?/g) || []).map(n => parseFloat(n.replace(",", ".")));
+    if(!nums.length) return null;
+    const avg = nums.reduce((a,b)=>a+b,0) / nums.length;
+    return Math.round(avg);
+  }
+
+  PLANTS_DATA.forEach(p => {
+    p.plantSpacingCm = parseSpacingCm(p.plantSpacing) || parseSpacingCm(p.rowSpacing) || 30;
+    p.rowSpacingCm = parseSpacingCm(p.rowSpacing) || p.plantSpacingCm;
+    p.footprintCm = p.plantSpacingCm; // für die Kreisgröße bei Einzelplatzierung
+  });
+
+  const ITEMS = [...PLANTS_DATA, ...MATERIALS_DATA];
+  const ITEM_BY_ID = Object.fromEntries(ITEMS.map(it => [it.id, it]));
+
+  // Liefert die Abmessungen eines Items in cm, unabhängig von der Form.
+  function getDims(item){
+    if(item.shape === "rect"){
+      return { shape:"rect", w:item.widthCm, h:item.heightCm };
+    }
+    // Kreisförmig: Durchmesser kommt bevorzugt aus footprintCm (Pflanzen-Standard),
+    // sonst aus diameterCm oder ersatzweise widthCm (praktisch für rundes Baumaterial
+    // ohne eigenes Pflanzabstand-Feld).
+    const d = item.footprintCm ?? item.diameterCm ?? item.widthCm;
+    return { shape:"circle", w:d, h:d };
+  }
+
+  // Liefert das visuelle Symbol eines Items als HTML-Schnipsel, für alle
+  // Text-Kontexte (Sidebar-Karte, Detailüberschrift, Auswahlleiste, Drag-
+  // Ghost). Reihenfolge: Bild (item.image) > Icon (item.icon) > leer.
+  // sizePx bestimmt Breite/Höhe des Bildes; das Icon bleibt in seiner
+  // eigenen Schriftgröße (per CSS des jeweiligen Kontexts geregelt).
+  function itemVisualHtml(item, sizePx = 20){
+    if(item.image){
+      return `<img src="${item.image}" alt="" class="item-visual-img" style="width:${sizePx}px;height:${sizePx}px;">`;
+    }
+    if(item.icon){
+      return item.icon;
+    }
+    return "";
+  }
+
+  /* ---------------------------------------------------------------
+     2) STATE
+  ----------------------------------------------------------------*/
+  const state = {
+    bedWidth: 1000,
+    bedHeight: 1000,
+    displayScale: 1.0, // px pro cm für die Anzeigegröße (= Zoomfaktor)
+    showGrid: true, // Rasterlinien ein-/ausblendbar
+    canvasBg: "#d9cfa8", // Hintergrundfarbe des Rasters
+    bgImage: null, // {dataUrl, width, height} in Original-Pixelmaßen (=cm, 1px=1cm),
+                   // als Base64 eingebettet statt per URL - wie bei Pflanzenbildern,
+                   // damit der PNG-Export nicht am "tainted canvas"-Problem scheitert.
+                   // null = kein Hintergrundbild, es gilt nur canvasBg.
+    bgImageVisible: true, // erlaubt temporäres Ausblenden, ohne das Bild zu entfernen
+    instances: [], // {uid, itemId, x, y, locked?}  x/y = cm, Mittelpunkt.
+                   // locked=true: nicht verschiebbar/nicht in der Marquee-Auswahl
+                   // (z.B. fixierte Rasenflächen). Reihenfolge im Array = Ebenen-
+                   // /Zeichenreihenfolge (spätere Einträge liegen weiter vorn).
+    notes: [] // {uid, x, y, w, h, text, bg, color, fontSize}  x/y = cm, Mittelpunkt; w/h = cm
+  };
+  const ZOOM_MIN = 0.1, ZOOM_MAX = 5.0;
+  const NOTE_DEFAULT_W = 90, NOTE_DEFAULT_H = 70;
+  const NOTE_MIN_W = 40, NOTE_MIN_H = 30;
+  const NOTE_DEFAULT_BG = "#fff3a0";
+  const NOTE_DEFAULT_COLOR = "#4a3a2a";
+  const NOTE_DEFAULT_FONT_SIZE = 11; // px, Bildschirm-Basisgröße
+  const NOTE_FONT_SIZE_MIN = 8, NOTE_FONT_SIZE_MAX = 24;
+  let selectedUids = new Set(); // Menge der aktuell ausgewählten Objekte (Mehrfachauswahl via Shift-Klick)
+  let selectedNoteUids = new Set(); // dito, aber für Notizzettel
+  let armedItemId = null;     // Item, das gerade für die Flächenfüllung "bewaffnet" ist
+  let fillLocked = false;      // true: die per Flächenfüllung neu erzeugten Instanzen
+                                // sofort mit locked:true anlegen (z.B. fixierte Rasenfläche)
+  let activeCardItemId = null; // Item, dessen Karte in der Seitenleiste gerade hervorgehoben ist
+                                // (z.B. weil im Raster ein Objekt dieses Typs ausgewählt wurde)
+  let uidCounter = 1;
+  let noteUidCounter = 1;
+
+  /* ---------------------------------------------------------------
+     2b) UNDO / REDO
+     Einfache Snapshot-Historie: vor jeder inhaltlichen Änderung (Objekt
+     platzieren/verschieben/löschen, Flächenfüllung, Gartengröße) wird
+     der VORHERIGE Stand auf den Undo-Stack gelegt. Der Zoom gehört
+     bewusst NICHT zur Historie - das wäre lästig statt hilfreich.
+  ----------------------------------------------------------------*/
+  const HISTORY_LIMIT = 50;
+  let undoStack = [];
+  let redoStack = [];
+
+  function snapshotState(){
+    return {
+      bedWidth: state.bedWidth,
+      bedHeight: state.bedHeight,
+      instances: state.instances.map(i => ({...i})),
+      notes: state.notes.map(n => ({...n}))
+    };
+  }
+
+  function applySnapshot(snap){
+    state.bedWidth = snap.bedWidth;
+    state.bedHeight = snap.bedHeight;
+    state.instances = snap.instances.map(i => ({...i}));
+    state.notes = (snap.notes || []).map(n => ({...n}));
+    bedWidthInput.value = state.bedWidth;
+    bedHeightInput.value = state.bedHeight;
+    selectedUids.clear();
+    selectedNoteUids.clear();
+    renderBed();
+  }
+
+  // Vor einer Änderung aufrufen, um den AKTUELLEN (noch alten) Stand zu sichern.
+  function pushHistory(){
+    undoStack.push(snapshotState());
+    if(undoStack.length > HISTORY_LIMIT) undoStack.shift();
+    redoStack = []; // neue Änderung macht die Redo-Historie ungültig
+    syncHistoryUi();
+  }
+
+  function undo(){
+    if(!undoStack.length) return;
+    redoStack.push(snapshotState());
+    applySnapshot(undoStack.pop());
+    syncHistoryUi();
+  }
+
+  function redo(){
+    if(!redoStack.length) return;
+    undoStack.push(snapshotState());
+    applySnapshot(redoStack.pop());
+    syncHistoryUi();
+  }
+
+  function syncHistoryUi(){
+    undoBtn.disabled = !undoStack.length;
+    redoBtn.disabled = !redoStack.length;
+  }
+
+
+  /* ---------------------------------------------------------------
+     3) DOM REFERENCES
+  ----------------------------------------------------------------*/
+  const plantListEl = document.getElementById("plantList");
+  const detailPanelEl = document.getElementById("detailPanel");
+  const searchInputEl = document.getElementById("searchInput");
+  const bedSvg = document.getElementById("bedSvg");
+  const selectionBarEl = document.getElementById("selectionBar");
+  const bedWidthInput = document.getElementById("bedWidthInput");
+  const bedHeightInput = document.getElementById("bedHeightInput");
+  const addNoteBtn = document.getElementById("addNoteBtn");
+  const noteStylePopover = document.getElementById("noteStylePopover");
+  const noteStyleBgInput = document.getElementById("noteStyleBgInput");
+  const noteStyleColorInput = document.getElementById("noteStyleColorInput");
+  const noteStyleFontInput = document.getElementById("noteStyleFontInput");
+  const noteStyleFontValue = document.getElementById("noteStyleFontValue");
+  const saveBtn = document.getElementById("saveBtn");
+  const loadBtn = document.getElementById("loadBtn");
+  const loadFileInput = document.getElementById("loadFileInput");
+  const exportPngBtn = document.getElementById("exportPngBtn");
+  const openDbEditorBtn = document.getElementById("openDbEditorBtn");
+  const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
+  const headerToggleBtn = document.getElementById("headerToggleBtn");
+  const headerToggleIcon = document.getElementById("headerToggleIcon");
+  const headerEl = document.querySelector("header");
+  const asideEl = document.getElementById("sidebarShell");
+  const zoomRangeEl = document.getElementById("zoomRange");
+  const zoomLabelEl = document.getElementById("zoomLabel");
+  const canvasBgInputEl = document.getElementById("canvasBgInput");
+  const toggleGridBtn = document.getElementById("toggleGridBtn");
+  const bgImageBtn = document.getElementById("bgImageBtn");
+  const bgImagePopover = document.getElementById("bgImagePopover");
+  const bgImageFileInput = document.getElementById("bgImageFileInput");
+  const canvasScrollEl = document.querySelector(".canvas-scroll");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
+  const langSelectEl = document.getElementById("langSelect");
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  /* ---------------------------------------------------------------
+     2c) I18N (Mehrsprachigkeit)
+     I18N / I18N_AVAILABLE / APPLICATION_STARTUP_LANGUAGE_CODE kommen
+     aus gartenplaner_lang.js. t(key, vars) holt den Text der aktuellen
+     Sprache und ersetzt Platzhalter wie {name} durch vars.name.
+     Fällt eine Sprache/Key mal aus (z.B. Tippfehler), springt es auf
+     Deutsch als Sicherheitsnetz zurück, damit nie ein leerer Text
+     oder "undefined" im UI auftaucht.
+  ----------------------------------------------------------------*/
+  const LANG_STORAGE_KEY = "gartenplaner_lang";
+  let currentLang = localStorage.getItem(LANG_STORAGE_KEY);
+  if(!I18N_AVAILABLE.includes(currentLang)) currentLang = APPLICATION_STARTUP_LANGUAGE_CODE;
+
+  function t(key, vars){
+    let str = (I18N[currentLang] && I18N[currentLang][key]) ?? I18N.de[key] ?? key;
+    if(vars){
+      Object.keys(vars).forEach(k => {
+        str = str.replaceAll(`{${k}}`, vars[k]);
+      });
+    }
+    return str;
+  }
+
+  // Setzt alle statischen (nicht dynamisch neu erzeugten) Texte im DOM.
+  // Dynamische Inhalte (Pflanzenkarten, Detail-Panel, Selection-Bar) werden
+  // durch erneutes Aufrufen ihrer jeweiligen render-Funktion aktualisiert -
+  // die greifen ja bei jedem Aufruf ohnehin frisch auf t() zu.
+  // Setzt den kurzen Titel ("Gartenplaner" o.ä.). Endet der übersetzte Text
+  // auf "planer" (z.B. deutsch "Gartenplaner", englisch "Garden planer"-Fälle),
+  // wird nur dieser Endteil farblich abgesetzt (siehe .h1-suffix CSS).
+  // In allen anderen Sprachen/Fällen bleibt der Text unverändert einfarbig -
+  // hier wird nichts geraten, um keine falschen Wortteile zu färben.
+  function setTitleShort(text){
+    const el = document.getElementById("titleShort");
+    const suffix = "planer";
+    if(text.toLowerCase().endsWith(suffix)){
+      const cut = text.length - suffix.length;
+      const head = text.slice(0, cut);
+      const tail = text.slice(cut);
+      el.textContent = "";
+      el.appendChild(document.createTextNode(head));
+      const span = document.createElement("span");
+      span.className = "h1-suffix";
+      span.textContent = tail;
+      el.appendChild(span);
+    } else {
+      el.textContent = text;
+    }
+  }
+
+  function applyStaticTexts(){
+    document.title = t("title_full");
+    document.getElementById("titleFull").textContent = "Julia's ";
+    setTitleShort(t("title_short").replace(/^Julia's\s*/i, ""));
+    document.getElementById("sloganText").textContent = t("slogan");
+    document.getElementById("bedWidthLabel").textContent = t("bed_width_label");
+    document.getElementById("bedHeightLabel").textContent = t("bed_height_label");
+
+    canvasBgInputEl.title = t("tooltip_canvas_bg");
+    toggleGridBtn.title = t("tooltip_toggle_grid");
+    bgImageBtn.title = t("tooltip_bg_image");
+    undoBtn.title = t("tooltip_undo");
+    redoBtn.title = t("tooltip_redo");
+    saveBtn.title = t("tooltip_save");
+    addNoteBtn.title = t("tooltip_add_note");
+    loadBtn.title = t("tooltip_load");
+    exportPngBtn.title = t("tooltip_export_png");
+    openDbEditorBtn.title = t("tooltip_db_editor");
+    langSelectEl.title = t("tooltip_lang_select");
+    headerToggleBtn.title = headerEl.classList.contains("collapsed") ? t("tooltip_header_expand") : t("tooltip_header_collapse");
+    sidebarToggleBtn.title = asideEl.classList.contains("collapsed") ? t("tooltip_sidebar_show") : t("tooltip_sidebar_hide");
+    searchInputEl.placeholder = t("search_placeholder");
+    searchClearBtn.title = t("tooltip_search_clear");
+    document.getElementById("noteStyleBgLabel").textContent = t("note_style_bg_label");
+    document.getElementById("noteStyleColorLabel").textContent = t("note_style_color_label");
+    document.getElementById("noteStyleFontLabel").textContent = t("note_style_font_label");
+    document.getElementById("footerScaleText").textContent = t("footer_scale");
+    const creditsLink = document.getElementById("footerCreditsLink");
+    creditsLink.textContent = t("footer_credits_link");
+    creditsLink.setAttribute("data-tooltip", t("footer_credits_tooltip"));
+  }
+
+  // Wendet eine Sprache komplett an: statische Texte + Neu-Rendern aller
+  // dynamischen Bereiche, die Text enthalten.
+  function applyLanguage(code){
+    currentLang = I18N_AVAILABLE.includes(code) ? code : APPLICATION_STARTUP_LANGUAGE_CODE;
+    langSelectEl.value = currentLang;
+    localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+    applyStaticTexts();
+    renderPlantList();
+    renderDetailPanel(activeCardItemId ? ITEM_BY_ID[activeCardItemId] : null);
+    renderSelectionBar();
+    renderBed();
+  }
+
+  langSelectEl.addEventListener("change", () => applyLanguage(langSelectEl.value));
+
+  // Merkt sich, welche Listen-Gruppen (Pflanzen / Baumaterial) eingeklappt sind.
+  const collapsedGroups = { plant: false, material: false };
+
+  /* ---------------------------------------------------------------
+     4) SIDEBAR: Liste rendern (zwei Gruppen: Pflanzen / Material)
+  ----------------------------------------------------------------*/
+  function renderGroup(items, plantKind, headingLabel){
+    const q = searchInputEl.value.trim().toLowerCase();
+    const filtered = items.filter(it => it.kind === plantKind && (!q || it.name.toLowerCase().includes(q)));
+    if(!filtered.length) return null;
+
+    const isCollapsed = collapsedGroups[plantKind];
+    const frag = document.createDocumentFragment();
+    const heading = document.createElement("div");
+    heading.className = "list-heading" + (isCollapsed ? " collapsed" : "");
+    heading.innerHTML = `<span class="caret">▾</span><span class="heading-label">${headingLabel}</span><span class="heading-count">(${filtered.length})</span>`;
+    heading.addEventListener("click", () => {
+      collapsedGroups[plantKind] = !collapsedGroups[plantKind];
+      renderPlantList();
+    });
+    frag.appendChild(heading);
+
+    const body = document.createElement("div");
+    body.className = "list-group-body" + (isCollapsed ? " collapsed" : "");
+    frag.appendChild(body);
+
+    filtered.forEach(it => {
+      const dims = getDims(it);
+      const metaText = dims.shape === "circle"
+        ? `Ø ${dims.w} cm`
+        : `${dims.w}×${dims.h} cm`;
+
+      const card = document.createElement("div");
+      card.className = "plant-card"
+        + (it.id === armedItemId ? " armed" : "")
+        + (it.id === activeCardItemId ? " active-card" : "");
+      card.style.setProperty("--card-accent", it.listAccent || it.accent);
+      card.dataset.itemId = it.id;
+      card.innerHTML = `
+        <div class="icon">${itemVisualHtml(it, 22)}</div>
+        <div class="info">
+          <div class="name">${it.name}</div>
+          <div class="meta">${metaText}</div>
+        </div>
+        <button class="fill-btn" type="button" title="${t("tooltip_fill_area", {name: it.name})}">▦</button>
+      `;
+      attachCardDragHandlers(card, it.id);
+      const fillBtn = card.querySelector(".fill-btn");
+      fillBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      fillBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if(armedItemId === it.id) disarmFill(); else armFill(it.id);
+      });
+      body.appendChild(card);
+    });
+    return frag;
+  }
+
+  function renderPlantList(){
+    plantListEl.innerHTML = "";
+    const plantsFrag = renderGroup(ITEMS, "plant", t("group_plants"));
+    if(plantsFrag) plantListEl.appendChild(plantsFrag);
+    const materialsFrag = renderGroup(ITEMS, "material", t("group_materials"));
+    if(materialsFrag) plantListEl.appendChild(materialsFrag);
+    if(!plantsFrag && !materialsFrag){
+      plantListEl.innerHTML = `<div class="empty-hint" style="padding:8px;">${t("empty_no_matches")}</div>`;
+    }
+    updateStickyHeadingOffsets();
+  }
+
+  // Beide Gruppen-Überschriften ("Pflanzen"/"Material") bleiben beim Scrollen
+  // sichtbar (position: sticky). Damit sie sich nicht überlappen, bekommt
+  // jede nachfolgende Heading als --sticky-offset die tatsächlich gemessene
+  // Höhe der vorherigen Headings - so bleibt es auch robust, falls sich
+  // Zeilenhöhe/Zoom/Font mal ändern.
+  function updateStickyHeadingOffsets(){
+    const headings = plantListEl.querySelectorAll(".list-heading");
+    let offset = 0;
+    headings.forEach(h => {
+      h.style.setProperty("--sticky-offset", offset + "px");
+      offset += h.getBoundingClientRect().height;
+    });
+  }
+
+  function renderDetailPanel(item){
+    if(!item){
+      detailPanelEl.innerHTML = `<div class="empty-hint">${t("empty_detail_hint")}</div>`;
+      return;
+    }
+    const dims = getDims(item);
+    const rows = [
+      [t("detail_size"), dims.shape === "circle" ? `Ø ${dims.w} cm` : `${dims.w}×${dims.h} cm`],
+      [t("detail_use"), item.use],
+      [t("detail_sow_depth"), item.sowDepth],
+      [t("detail_row_spacing"), item.rowSpacing ? item.rowSpacing + " cm" : ""],
+      [t("detail_plant_spacing"), item.plantSpacing ? item.plantSpacing + " cm" : ""],
+      [t("detail_pot_size"), item.topfgroesse],
+      [t("detail_location"), item.standort],
+      [t("detail_height"), item.hoehe],
+      [t("detail_bloom"), item.aussaat],
+      [t("detail_germination"), item.keimung],
+      [t("detail_germ_rate"), item.keimfaehigkeit],
+      [t("detail_culture_duration"), item.kulturdauer],
+      [t("detail_lifespan"), item.lebensdauer],
+      [t("detail_origin"), item.herkunft],
+      [t("detail_note"), item.notiz],
+    ].filter(([,v]) => v);
+
+    detailPanelEl.innerHTML = `
+      <h3>${itemVisualHtml(item, 20)} ${item.name}</h3>
+      ${item.latin ? `<div class="lat">${item.latin}</div>` : ""}
+      <dl>
+        ${rows.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}
+      </dl>
+    `;
+  }
+
+  const searchRowEl = document.getElementById("searchRow");
+  const searchClearBtn = document.getElementById("searchClearBtn");
+
+  function syncSearchClearBtn(){
+    searchRowEl.classList.toggle("has-value", searchInputEl.value.length > 0);
+  }
+
+  searchInputEl.addEventListener("input", () => {
+    syncSearchClearBtn();
+    renderPlantList();
+  });
+
+  searchClearBtn.addEventListener("click", () => {
+    searchInputEl.value = "";
+    syncSearchClearBtn();
+    renderPlantList();
+    searchInputEl.focus();
+  });
+
+  syncSearchClearBtn();
+
+  // Setzt die Sidebar-Karte für ein Item als aktiv: Detail-Panel füllen,
+  // Hervorhebung in der Liste setzen und zur Karte scrollen, damit sie
+  // sichtbar wird (z.B. bei langer Liste + Suche-Filter aktiv).
+  function setActiveCard(itemId){
+    activeCardItemId = itemId;
+    renderDetailPanel(itemId ? ITEM_BY_ID[itemId] : null);
+    renderPlantList();
+    if(itemId){
+      const card = plantListEl.querySelector(`.plant-card[data-item-id="${itemId}"]`);
+      if(card) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  /* ---------------------------------------------------------------
+     5) SVG-GARTEN rendern
+  ----------------------------------------------------------------*/
+  function ensureDefs(){
+    const defs = document.createElementNS(SVG_NS, "defs");
+    defs.innerHTML = `
+      <pattern id="pavePattern" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="#9a9a90"/>
+        <rect x="0.6" y="0.6" width="8.8" height="8.8" fill="none" stroke="#6e6e64" stroke-width="0.7"/>
+      </pattern>
+      <pattern id="brickPattern" width="20" height="10" patternUnits="userSpaceOnUse">
+        <rect width="20" height="10" fill="#a8502b"/>
+        <rect x="0" y="0" width="19.3" height="9.3" fill="none" stroke="#6e2f18" stroke-width="0.8"/>
+        <rect x="-10" y="5" width="19.3" height="4.3" fill="none" stroke="#6e2f18" stroke-width="0.8"/>
+        <rect x="10" y="5" width="9.3" height="4.3" fill="none" stroke="#6e2f18" stroke-width="0.8"/>
+      </pattern>
+      <pattern id="grassPattern" width="16" height="14" patternUnits="userSpaceOnUse">
+        <rect width="16" height="14" fill="#6fa03e"/>
+        <path d="M2,14 L1.2,8.5 M2,14 L2.8,8.8" stroke="#4f7d2a" stroke-width="0.7" stroke-linecap="round" fill="none"/>
+        <path d="M6,14 L5.3,7.8 M6,14 L6.9,8.6" stroke="#5a8c32" stroke-width="0.7" stroke-linecap="round" fill="none"/>
+        <path d="M10,14 L9.2,9 M10,14 L10.8,8.3" stroke="#4f7d2a" stroke-width="0.7" stroke-linecap="round" fill="none"/>
+        <path d="M13.5,14 L12.8,8.2 M13.5,14 L14.3,8.9" stroke="#5a8c32" stroke-width="0.7" stroke-linecap="round" fill="none"/>
+        <path d="M4,14 L3.6,10.5" stroke="#3f6b22" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+        <path d="M8.5,14 L8.1,10.2" stroke="#3f6b22" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+        <path d="M15,14 L14.7,10.6" stroke="#3f6b22" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+      </pattern>
+    `;
+    bedSvg.appendChild(defs);
+  }
+
+  // Setzt/aktualisiert Form + Text eines Markers, OHNE das SVG neu aufzubauen.
+  // Wird sowohl beim initialen Rendern als auch beim Ziehen (jeder pointermove) verwendet.
+  // Erzeugt das visuelle SVG-Element einer platzierten Instanz im Garten:
+  // Bild (item.image) > Icon-Text (item.icon) > nichts. Die Größe richtet
+  // sich nach der kleineren Kantenlänge/dem Durchmesser des Objekts, ist
+  // aber gedeckelt, damit große Beete nicht von riesigen Symbolen
+  // überladen werden.
+  function createVisualElement(item, dims){
+    const minSide = Math.min(dims.w, dims.h);
+    if(item.image){
+      const size = Math.max(10, Math.min(minSide * 0.7, 50));
+      const img = document.createElementNS(SVG_NS, "image");
+      img.setAttribute("href", item.image);
+      img.setAttributeNS("http://www.w3.org/1999/xlink", "href", item.image); // Fallback für ältere Renderer
+      img.setAttribute("width", size);
+      img.setAttribute("height", size);
+      img.setAttribute("class", "plant-visual");
+      return img;
+    }
+    if(item.icon){
+      const fontSize = Math.max(6, Math.min(minSide * 0.5, 13));
+      const text = document.createElementNS(SVG_NS, "text");
+      text.setAttribute("font-size", fontSize);
+      text.setAttribute("class", "plant-visual");
+      text.textContent = item.icon;
+      return text;
+    }
+    return null;
+  }
+
+  function positionMark(g, item, x, y){
+    const dims = getDims(item);
+    // Gecachte Referenzen bevorzugen (siehe renderBed) - querySelector nur als
+    // Fallback, falls g aus irgendeinem Grund ohne Cache hereinkommt.
+    const shapeEl = g._shapeEl || g.querySelector("circle, rect");
+    if(dims.shape === "circle"){
+      shapeEl.setAttribute("cx", x);
+      shapeEl.setAttribute("cy", y);
+    } else {
+      shapeEl.setAttribute("x", x - dims.w/2);
+      shapeEl.setAttribute("y", y - dims.h/2);
+    }
+    const visualEl = g._visualEl !== undefined ? g._visualEl : g.querySelector(".plant-visual");
+    if(visualEl){
+      if(visualEl.tagName === "image"){
+        // Bilder werden per x/y (linke obere Ecke) positioniert, anders als
+        // Text mit text-anchor:middle - deshalb hier um die halbe Kantenlänge
+        // versetzt, damit auch das Bild auf (x,y) zentriert erscheint.
+        const size = parseFloat(visualEl.getAttribute("width"));
+        visualEl.setAttribute("x", x - size/2);
+        visualEl.setAttribute("y", y - size/2);
+      } else {
+        visualEl.setAttribute("x", x);
+        visualEl.setAttribute("y", y);
+      }
+    }
+  }
+
+  // Wählt eine Instanz aus, ohne das SVG neu aufzubauen (nur Klassen + Statusleiste).
+  // withShift=true: Instanz wird der bestehenden Auswahl hinzugefügt/daraus entfernt (Toggle).
+  // withShift=false: Instanz ersetzt die gesamte Auswahl (klassisches Einzel-Klick-Verhalten).
+  function selectInstance(uid, g, withShift){
+    if(!withShift){
+      // Alte Auswahl-Markierungen entfernen
+      bedSvg.querySelectorAll(".plant-mark.selected").forEach(el => el.classList.remove("selected"));
+      selectedUids.clear();
+      if(uid != null) selectedUids.add(uid);
+      if(g) g.classList.add("selected");
+    } else {
+      if(selectedUids.has(uid)){
+        selectedUids.delete(uid);
+        if(g) g.classList.remove("selected");
+      } else {
+        selectedUids.add(uid);
+        if(g) g.classList.add("selected");
+      }
+    }
+    renderSelectionBar();
+    // Sidebar mit dem (zuletzt) ausgewählten Objekt synchronisieren, damit
+    // das Detail-Panel passende Infos zeigt.
+    if(uid != null){
+      const inst = state.instances.find(i => i.uid === uid);
+      if(inst) setActiveCard(inst.itemId);
+    } else if(!selectedUids.size){
+      setActiveCard(null);
+    }
+  }
+
+  function clearSelection(){
+    bedSvg.querySelectorAll(".plant-mark.selected").forEach(el => el.classList.remove("selected"));
+    bedSvg.querySelectorAll(".note-mark.selected").forEach(el => el.classList.remove("selected"));
+    selectedUids.clear();
+    selectedNoteUids.clear();
+    renderSelectionBar();
+    setActiveCard(null);
+  }
+
+  /* ---------------------------------------------------------------
+     6b) NOTIZZETTEL
+     Frei platzierbare Klebezettel mit editierbarem Text, unabhängig
+     vom Pflanzen-System (kein itemId, eigene uid-Reihe). Verschiebbar
+     wie Pflanzenmarken, zusätzlich per Eck-Griff skalierbar, und per
+     "×"-Knopf direkt am Zettel löschbar.
+  ----------------------------------------------------------------*/
+  function positionNoteMark(g, note){
+    g.setAttribute("transform", `translate(${note.x - note.w/2}, ${note.y - note.h/2})`);
+    const bodyEl = g._bodyEl;
+    bodyEl.setAttribute("width", note.w);
+    bodyEl.setAttribute("height", note.h);
+    const fo = g._foEl;
+    fo.setAttribute("width", note.w);
+    fo.setAttribute("height", Math.max(0, note.h - 18)); // oberer Streifen bleibt Ziehgriff frei
+    fo.setAttribute("y", 18);
+    const dragHandle = g._dragHandleEl;
+    dragHandle.setAttribute("width", note.w);
+    const delBtn = g._delBtnEl;
+    delBtn.setAttribute("transform", `translate(${note.w - 11}, 11)`);
+    const styleBtn = g._styleBtnEl;
+    styleBtn.setAttribute("transform", `translate(${note.w - 30}, 11)`);
+    const resizeHandle = g._resizeHandleEl;
+    resizeHandle.setAttribute("points", `${note.w-10},${note.h} ${note.w},${note.h} ${note.w},${note.h-10}`);
+  }
+
+  function selectNote(uid, g, withShift){
+    if(!withShift){
+      bedSvg.querySelectorAll(".plant-mark.selected, .note-mark.selected").forEach(el => el.classList.remove("selected"));
+      selectedUids.clear();
+      selectedNoteUids.clear();
+      if(uid != null) selectedNoteUids.add(uid);
+      if(g) g.classList.add("selected");
+    } else {
+      if(selectedNoteUids.has(uid)){
+        selectedNoteUids.delete(uid);
+        if(g) g.classList.remove("selected");
+      } else {
+        selectedNoteUids.add(uid);
+        if(g) g.classList.add("selected");
+      }
+    }
+    renderSelectionBar();
+    setActiveCard(null);
+  }
+
+  function createNoteMark(note){
+    const g = document.createElementNS(SVG_NS, "g");
+    g.setAttribute("class", "note-mark" + (selectedNoteUids.has(note.uid) ? " selected" : ""));
+    g.dataset.noteUid = note.uid;
+
+    const bodyEl = document.createElementNS(SVG_NS, "rect");
+    bodyEl.setAttribute("class", "note-body");
+    bodyEl.setAttribute("rx", 3);
+    // Farbe zusätzlich als echtes Attribut (nicht nur CSS-Klasse) setzen: beim
+    // PNG-Export wird das SVG als eigenständige, vom Dokument losgelöste Datei
+    // geladen - dort greifen die <style>-Regeln der Hauptseite nicht mehr,
+    // und ein Rect ohne fill-Attribut fällt auf SVG-Standard-Schwarz zurück.
+    bodyEl.setAttribute("fill", note.bg || NOTE_DEFAULT_BG);
+    bodyEl.setAttribute("stroke", shadeColor(note.bg || NOTE_DEFAULT_BG, -18));
+    bodyEl.setAttribute("stroke-width", "1.5");
+    g.appendChild(bodyEl);
+
+    // foreignObject für den editierbaren Text - lässt sich in SVG sonst nicht
+    // vernünftig umsetzen (textarea statt starrem <text>).
+    const fo = document.createElementNS(SVG_NS, "foreignObject");
+    fo.setAttribute("x", 0);
+    const textarea = document.createElement("textarea");
+    textarea.className = "note-textarea";
+    textarea.value = note.text || "";
+    textarea.placeholder = t("note_placeholder");
+    textarea.style.color = note.color || NOTE_DEFAULT_COLOR;
+    textarea.style.fontSize = (note.fontSize || NOTE_DEFAULT_FONT_SIZE) + "px";
+    textarea.addEventListener("pointerdown", (e) => e.stopPropagation()); // nicht als Drag werten
+    let textPushed = false;
+    textarea.addEventListener("focus", () => { textPushed = false; });
+    textarea.addEventListener("input", () => {
+      if(!textPushed){ pushHistory(); textPushed = true; }
+      note.text = textarea.value;
+    });
+    fo.appendChild(textarea);
+    g.appendChild(fo);
+
+    // Ziehgriff: schmaler Streifen oben, damit man den Zettel bewegen kann,
+    // ohne dabei ins Textfeld zu klicken.
+    const dragHandle = document.createElementNS(SVG_NS, "rect");
+    dragHandle.setAttribute("class", "note-drag-handle");
+    dragHandle.setAttribute("x", 0);
+    dragHandle.setAttribute("y", 0);
+    dragHandle.setAttribute("height", 18);
+    g.appendChild(dragHandle);
+
+    // Lösch-Knopf oben rechts
+    const delBtn = document.createElementNS(SVG_NS, "g");
+    delBtn.setAttribute("class", "note-delete-btn");
+    const delCircle = document.createElementNS(SVG_NS, "circle");
+    delCircle.setAttribute("r", 8);
+    const delText = document.createElementNS(SVG_NS, "text");
+    delText.textContent = "×";
+    delBtn.appendChild(delCircle);
+    delBtn.appendChild(delText);
+    delBtn.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      pushHistory();
+      state.notes = state.notes.filter(n => n.uid !== note.uid);
+      selectedNoteUids.delete(note.uid);
+      renderBed();
+    });
+    g.appendChild(delBtn);
+
+    // Style-Knopf (Farbe/Schriftgröße) links neben dem Lösch-Knopf
+    const styleBtn = document.createElementNS(SVG_NS, "g");
+    styleBtn.setAttribute("class", "note-style-btn");
+    const styleCircle = document.createElementNS(SVG_NS, "circle");
+    styleCircle.setAttribute("r", 8);
+    const styleText = document.createElementNS(SVG_NS, "text");
+    styleText.textContent = "🎨";
+    styleBtn.appendChild(styleCircle);
+    styleBtn.appendChild(styleText);
+    styleBtn.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      openNoteStylePopover(note, styleBtn);
+    });
+    g.appendChild(styleBtn);
+
+    // Skalier-Griff unten rechts
+    const resizeHandle = document.createElementNS(SVG_NS, "polygon");
+    resizeHandle.setAttribute("class", "note-resize-handle");
+    g.appendChild(resizeHandle);
+
+    g._bodyEl = bodyEl;
+    g._foEl = fo;
+    g._textareaEl = textarea;
+    g._dragHandleEl = dragHandle;
+    g._delBtnEl = delBtn;
+    g._styleBtnEl = styleBtn;
+    g._resizeHandleEl = resizeHandle;
+
+    attachNotePointerHandlers(g, dragHandle, note.uid);
+    attachNoteResizeHandlers(g, resizeHandle, note.uid);
+
+    return g;
+  }
+
+  function attachNotePointerHandlers(g, dragHandle, uid){
+    let pointerId = null;
+    dragHandle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      pointerId = e.pointerId;
+      dragHandle.setPointerCapture(pointerId);
+      const withShift = e.shiftKey;
+      const note = state.notes.find(n => n.uid === uid);
+      const startClientX = e.clientX, startClientY = e.clientY;
+      const startSvg = clientToSvgPoint(startClientX, startClientY);
+      const offsetX = note.x - startSvg.x;
+      const offsetY = note.y - startSvg.y;
+      let moved = false;
+
+      function onMove(ev){
+        const dx = ev.clientX - startClientX, dy = ev.clientY - startClientY;
+        if(!moved && Math.hypot(dx, dy) > 3){
+          moved = true;
+          pushHistory();
+        }
+        if(moved){
+          const p = clientToSvgPoint(ev.clientX, ev.clientY);
+          note.x = clamp(p.x + offsetX, note.w/2, state.bedWidth - note.w/2);
+          note.y = clamp(p.y + offsetY, note.h/2, state.bedHeight - note.h/2);
+          positionNoteMark(g, note);
+        }
+      }
+      function onUp(){
+        dragHandle.releasePointerCapture(pointerId);
+        dragHandle.removeEventListener("pointermove", onMove);
+        dragHandle.removeEventListener("pointerup", onUp);
+        dragHandle.removeEventListener("pointercancel", onUp);
+        selectNote(uid, g, withShift);
+      }
+      dragHandle.addEventListener("pointermove", onMove);
+      dragHandle.addEventListener("pointerup", onUp);
+      dragHandle.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  function attachNoteResizeHandlers(g, resizeHandle, uid){
+    let pointerId = null;
+    resizeHandle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      pointerId = e.pointerId;
+      resizeHandle.setPointerCapture(pointerId);
+      const note = state.notes.find(n => n.uid === uid);
+      const startClientX = e.clientX, startClientY = e.clientY;
+      const startW = note.w, startH = note.h;
+      const startX = note.x, startY = note.y;
+      let moved = false;
+
+      function onMove(ev){
+        const dx = (ev.clientX - startClientX) / state.displayScale;
+        const dy = (ev.clientY - startClientY) / state.displayScale;
+        if(!moved && Math.hypot(dx, dy) > 3){
+          moved = true;
+          pushHistory();
+        }
+        if(moved){
+          // Zettel wächst/schrumpft von der oberen linken Ecke aus, damit
+          // der Bezugspunkt (Mittelpunkt) mitwandert statt springt.
+          const newW = Math.max(NOTE_MIN_W, startW + dx);
+          const newH = Math.max(NOTE_MIN_H, startH + dy);
+          note.x = startX + (newW - startW) / 2;
+          note.y = startY + (newH - startH) / 2;
+          note.w = newW;
+          note.h = newH;
+          positionNoteMark(g, note);
+        }
+      }
+      function onUp(){
+        resizeHandle.releasePointerCapture(pointerId);
+        resizeHandle.removeEventListener("pointermove", onMove);
+        resizeHandle.removeEventListener("pointerup", onUp);
+        resizeHandle.removeEventListener("pointercancel", onUp);
+      }
+      resizeHandle.addEventListener("pointermove", onMove);
+      resizeHandle.addEventListener("pointerup", onUp);
+      resizeHandle.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  // Neue Notiz in der Mitte des aktuell sichtbaren Ausschnitts platzieren.
+  function addNote(){
+    pushHistory();
+    const scrollRect = canvasScrollEl.getBoundingClientRect();
+    const centerClientX = scrollRect.left + scrollRect.width / 2;
+    const centerClientY = scrollRect.top + scrollRect.height / 2;
+    const centerSvg = clientToSvgPoint(centerClientX, centerClientY);
+    const note = {
+      uid: noteUidCounter++,
+      x: clamp(centerSvg.x, NOTE_DEFAULT_W/2, state.bedWidth - NOTE_DEFAULT_W/2),
+      y: clamp(centerSvg.y, NOTE_DEFAULT_H/2, state.bedHeight - NOTE_DEFAULT_H/2),
+      w: NOTE_DEFAULT_W,
+      h: NOTE_DEFAULT_H,
+      text: "",
+      bg: NOTE_DEFAULT_BG,
+      color: NOTE_DEFAULT_COLOR,
+      fontSize: NOTE_DEFAULT_FONT_SIZE
+    };
+    state.notes.push(note);
+    clearSelection();
+    selectedNoteUids.add(note.uid);
+    renderBed();
+    // Direkt in den Text springen, damit man sofort lostippen kann.
+    const g = bedSvg.querySelector(`.note-mark[data-note-uid="${note.uid}"]`);
+    if(g && g._textareaEl) g._textareaEl.focus();
+  }
+
+  /* ---------------------------------------------------------------
+     6c) NOTIZZETTEL STYLING (Hintergrund/Text/Schriftgröße)
+     Popover mit normalen <input type="color"/"range">, per position:fixed
+     am Style-Knopf des jeweiligen Zettels verankert. Änderungen greifen
+     sofort (live), pushHistory() nur einmal beim ersten Antasten je
+     Popover-Öffnung, damit Undo den ganzen Stylingvorgang als einen
+     Schritt zurücknimmt statt für jeden einzelnen Zwischenwert.
+  ----------------------------------------------------------------*/
+  let noteStyleTarget = null; // { note, g } - aktuell im Popover bearbeiteter Zettel
+  let noteStylePushed = false;
+
+  function openNoteStylePopover(note, styleBtnEl){
+    // Erneuter Klick auf denselben Knopf schließt das Popover wieder (Toggle).
+    if(noteStyleTarget && noteStyleTarget.note.uid === note.uid && !noteStylePopover.hidden){
+      closeNoteStylePopover();
+      return;
+    }
+    const g = bedSvg.querySelector(`.note-mark[data-note-uid="${note.uid}"]`);
+    noteStyleTarget = { note, g };
+    noteStylePushed = false;
+
+    noteStyleBgInput.value = note.bg || NOTE_DEFAULT_BG;
+    noteStyleColorInput.value = note.color || NOTE_DEFAULT_COLOR;
+    noteStyleFontInput.value = note.fontSize || NOTE_DEFAULT_FONT_SIZE;
+    noteStyleFontValue.textContent = (note.fontSize || NOTE_DEFAULT_FONT_SIZE) + "px";
+
+    // Popover am Style-Knopf verankern (Bildschirmkoordinaten, unabhängig
+    // von Zoom/Scroll, da direkt aus getBoundingClientRect() abgeleitet).
+    const btnRect = styleBtnEl.getBoundingClientRect();
+    noteStylePopover.hidden = false;
+    // Erst nach dem Sichtbarmachen messen, da [hidden] keine Größe hat.
+    const popRect = noteStylePopover.getBoundingClientRect();
+    let left = btnRect.left;
+    let top = btnRect.bottom + 6;
+    // Falls das Popover rechts oder unten über den Viewport hinausragen würde,
+    // stattdessen links bzw. oberhalb des Knopfs ausrichten.
+    if(left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
+    if(top + popRect.height > window.innerHeight - 8) top = btnRect.top - popRect.height - 6;
+    noteStylePopover.style.left = Math.max(8, left) + "px";
+    noteStylePopover.style.top = Math.max(8, top) + "px";
+  }
+
+  function closeNoteStylePopover(){
+    noteStylePopover.hidden = true;
+    noteStyleTarget = null;
+    noteStylePushed = false;
+  }
+
+  function applyNoteStyleChange(mutator){
+    if(!noteStyleTarget) return;
+    if(!noteStylePushed){ pushHistory(); noteStylePushed = true; }
+    mutator(noteStyleTarget.note);
+    // Nur die betroffene Zettel-Darstellung aktualisieren, nicht das ganze
+    // SVG neu aufbauen - sonst geht bei schnellem Farbwähler-Ziehen der
+    // Fokus/die Interaktion verloren.
+    const { note, g } = noteStyleTarget;
+    if(g){
+      g._bodyEl.setAttribute("fill", note.bg || NOTE_DEFAULT_BG);
+      g._bodyEl.setAttribute("stroke", shadeColor(note.bg || NOTE_DEFAULT_BG, -18));
+      g._textareaEl.style.color = note.color || NOTE_DEFAULT_COLOR;
+      g._textareaEl.style.fontSize = (note.fontSize || NOTE_DEFAULT_FONT_SIZE) + "px";
+    }
+  }
+
+  noteStyleBgInput.addEventListener("input", () => {
+    applyNoteStyleChange(note => { note.bg = noteStyleBgInput.value; });
+  });
+  noteStyleColorInput.addEventListener("input", () => {
+    applyNoteStyleChange(note => { note.color = noteStyleColorInput.value; });
+  });
+  noteStyleFontInput.addEventListener("input", () => {
+    const size = Number(noteStyleFontInput.value);
+    noteStyleFontValue.textContent = size + "px";
+    applyNoteStyleChange(note => { note.fontSize = size; });
+  });
+
+  // Popover schließen bei Klick außerhalb, oder wenn der zugehörige Zettel
+  // zwischenzeitlich gelöscht wurde (z.B. per Entf-Taste während offenem
+  // Popover).
+  document.addEventListener("pointerdown", (e) => {
+    if(noteStylePopover.hidden) return;
+    if(e.target.closest("#noteStylePopover")) return;
+    if(e.target.closest(".note-style-btn")) return; // eigener Toggle-Handler kümmert sich
+    closeNoteStylePopover();
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && !noteStylePopover.hidden) closeNoteStylePopover();
+  });
+
+  function renderBed(){
+    // SVG wird gleich komplett neu aufgebaut - ein offenes Style-Popover
+    // würde sonst auf ein verwaistes DOM-Element zeigen (z.B. nach Undo
+    // oder Löschen des zugehörigen Zettels).
+    closeNoteStylePopover();
+    bedSvg.setAttribute("viewBox", `0 0 ${state.bedWidth} ${state.bedHeight}`);
+    bedSvg.setAttribute("width", state.bedWidth * state.displayScale);
+    bedSvg.setAttribute("height", state.bedHeight * state.displayScale);
+    bedSvg.innerHTML = "";
+    ensureDefs();
+
+    // Hintergrundbild - unterste Ebene, noch vor den Gitterlinien. Wird als
+    // <pattern> in Original-Pixelmaßen (1px=1cm) angelegt, patternUnits
+    // userSpaceOnUse kachelt es automatisch horizontal/vertikal über das
+    // gesamte Raster, exakt wie grassPattern/pavePattern - nur mit einem
+    // eingebetteten Bild statt gezeichneten Formen.
+    if(state.bgImage && state.bgImageVisible){
+      const bgDefs = document.createElementNS(SVG_NS, "defs");
+      const pattern = document.createElementNS(SVG_NS, "pattern");
+      pattern.setAttribute("id", "bgImagePattern");
+      pattern.setAttribute("width", state.bgImage.width);
+      pattern.setAttribute("height", state.bgImage.height);
+      pattern.setAttribute("patternUnits", "userSpaceOnUse");
+      const img = document.createElementNS(SVG_NS, "image");
+      img.setAttribute("href", state.bgImage.dataUrl);
+      img.setAttributeNS("http://www.w3.org/1999/xlink", "href", state.bgImage.dataUrl); // Fallback für ältere Renderer
+      img.setAttribute("width", state.bgImage.width);
+      img.setAttribute("height", state.bgImage.height);
+      pattern.appendChild(img);
+      bgDefs.appendChild(pattern);
+      bedSvg.appendChild(bgDefs);
+
+      const bgRect = document.createElementNS(SVG_NS, "rect");
+      bgRect.setAttribute("x", 0);
+      bgRect.setAttribute("y", 0);
+      bgRect.setAttribute("width", state.bedWidth);
+      bgRect.setAttribute("height", state.bedHeight);
+      bgRect.setAttribute("fill", "url(#bgImagePattern)");
+      bedSvg.appendChild(bgRect);
+    }
+
+    // Gitterlinien alle 100 cm ("Furchen")
+    if(state.showGrid){
+      const grid = document.createElementNS(SVG_NS, "g");
+      for(let x = 0; x <= state.bedWidth; x += 100){
+        const line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("x1", x); line.setAttribute("x2", x);
+        line.setAttribute("y1", 0); line.setAttribute("y2", state.bedHeight);
+        line.setAttribute("stroke", "var(--color-grid-line)");
+        line.setAttribute("stroke-width", "0.8");
+        grid.appendChild(line);
+      }
+      for(let y = 0; y <= state.bedHeight; y += 100){
+        const line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("y1", y); line.setAttribute("y2", y);
+        line.setAttribute("x1", 0); line.setAttribute("x2", state.bedWidth);
+        line.setAttribute("stroke", "var(--color-grid-line)");
+        line.setAttribute("stroke-width", "0.8");
+        grid.appendChild(line);
+      }
+      bedSvg.appendChild(grid);
+    }
+
+    // Instanzen
+    state.instances.forEach(inst => {
+      const item = ITEM_BY_ID[inst.itemId];
+      if(!item) return;
+      const dims = getDims(item);
+
+      const g = document.createElementNS(SVG_NS, "g");
+      g.setAttribute("class", "plant-mark" + (selectedUids.has(inst.uid) ? " selected" : "") + (inst.locked ? " locked" : ""));
+      g.dataset.uid = inst.uid;
+
+      const fill = item.pattern ? `url(#${item.pattern})` : item.accent;
+
+      let shapeEl;
+      if(dims.shape === "circle"){
+        shapeEl = document.createElementNS(SVG_NS, "circle");
+        shapeEl.setAttribute("r", dims.w / 2);
+        shapeEl.setAttribute("fill", fill);
+        shapeEl.setAttribute("fill-opacity", item.pattern ? "1" : "0.55");
+        shapeEl.setAttribute("stroke", item.accent);
+      } else {
+        shapeEl = document.createElementNS(SVG_NS, "rect");
+        shapeEl.setAttribute("width", dims.w);
+        shapeEl.setAttribute("height", dims.h);
+        shapeEl.setAttribute("fill", fill);
+        shapeEl.setAttribute("stroke", item.accent);
+      }
+      g.appendChild(shapeEl);
+
+      const visualEl = createVisualElement(item, dims);
+      if(visualEl) g.appendChild(visualEl);
+
+      // Direkte Referenzen am Gruppen-Element cachen, damit positionMark() die
+      // Kind-Elemente nicht bei jedem Aufruf per querySelector neu suchen muss.
+      // Das war der Kern des Chrome-Bugs beim Verschieben vieler zugleich
+      // ausgewählter Objekte (z.B. nach Flächenfüllung): querySelector pro
+      // Instanz pro pointermove-Event summierte sich bei dichten, sich
+      // überlappenden <image>-Marken so stark auf, dass die visuelle
+      // Aktualisierung hinter der Maus zurückblieb ("hakeln") und beim
+      // Loslassen sichtbar auf die zuletzt berechnete state-Position
+      // "zurücksprang". Firefox war hier offenbar toleranter.
+      g._shapeEl = shapeEl;
+      g._visualEl = visualEl;
+
+      positionMark(g, item, inst.x, inst.y);
+      attachInstancePointerHandlers(g, inst.uid);
+      attachContextMenuHandler(g, inst.uid);
+      bedSvg.appendChild(g);
+    });
+
+    // Notizzettel - nach den Pflanzen gerendert, damit sie optisch obenauf liegen
+    state.notes.forEach(note => {
+      const g = createNoteMark(note);
+      positionNoteMark(g, note);
+      bedSvg.appendChild(g);
+    });
+
+    renderSelectionBar();
+  }
+
+  function renderSelectionBar(){
+    if(armedItemId){
+      const item = ITEM_BY_ID[armedItemId];
+      selectionBarEl.innerHTML = `
+        <span>🖌 ${t("selection_fill_hint", {visual: itemVisualHtml(item, 16), name: `<strong>${item.name}</strong>`})} <span class="hint">${t("selection_fill_esc")}</span></span>
+        <label class="fill-lock-toggle"><input type="checkbox" id="fillLockedCheckbox" ${fillLocked ? "checked" : ""}> ${t("fill_locked_toggle")}</label>
+        <button id="disarmFillBtn">${t("btn_finish")}</button>
+      `;
+      document.getElementById("disarmFillBtn").addEventListener("click", disarmFill);
+      document.getElementById("fillLockedCheckbox").addEventListener("change", (e) => {
+        fillLocked = e.target.checked;
+      });
+      return;
+    }
+    // Ungültige note-uids aussortieren (z.B. falls anderweitig gelöscht)
+    const validNoteUids = [...selectedNoteUids].filter(uid => state.notes.some(n => n.uid === uid));
+    if(validNoteUids.length !== selectedNoteUids.size){
+      selectedNoteUids = new Set(validNoteUids);
+    }
+
+    if(!selectedUids.size && !selectedNoteUids.size){
+      selectionBarEl.innerHTML = `<span class="hint">${t("selection_empty_full")}</span>`;
+      return;
+    }
+    // Ungültige uids aussortieren (z.B. falls eine Instanz anderweitig entfernt wurde)
+    const validUids = [...selectedUids].filter(uid => state.instances.some(i => i.uid === uid));
+    if(validUids.length !== selectedUids.size){
+      selectedUids = new Set(validUids);
+    }
+    if(!selectedUids.size && !selectedNoteUids.size){ return renderSelectionBar(); }
+
+    // Notizen sind mit ausgewählt (evtl. gemeinsam mit Pflanzen über Marquee) -
+    // eigener kompakter Hinweis mit Sammel-Löschen, da Zettel schon ihren
+    // eigenen ×-Knopf haben und hier meist nur die Mehrfachauswahl zählt.
+    if(selectedNoteUids.size && !selectedUids.size){
+      if(selectedNoteUids.size === 1){
+        selectionBarEl.innerHTML = `
+          <span>📝 ${t("selection_one_selected", {name: `<strong>${t("note_single")}</strong>`, x: Math.round([...selectedNoteUids].map(uid => state.notes.find(n=>n.uid===uid))[0].x), y: Math.round([...selectedNoteUids].map(uid => state.notes.find(n=>n.uid===uid))[0].y)})}</span>
+          <button id="removeSelectedNotesBtn">${t("btn_remove")}</button>
+        `;
+      } else {
+        selectionBarEl.innerHTML = `
+          <span>🔢 ${t("selection_many_selected", {count: `<strong>${selectedNoteUids.size}</strong>`})}</span>
+          <button id="removeSelectedNotesBtn">${t("btn_remove_all")}</button>
+        `;
+      }
+      document.getElementById("removeSelectedNotesBtn").addEventListener("click", () => {
+        pushHistory();
+        state.notes = state.notes.filter(n => !selectedNoteUids.has(n.uid));
+        selectedNoteUids.clear();
+        renderBed();
+      });
+      return;
+    }
+    if(selectedNoteUids.size && selectedUids.size){
+      selectionBarEl.innerHTML = `
+        <span>🔢 ${selectedUids.size + selectedNoteUids.size} ${t("selection_many_selected", {count: `<strong>${selectedUids.size + selectedNoteUids.size}</strong>`})}</span>
+        <button id="removeSelectedBtn">${t("btn_remove_all")}</button>
+      `;
+      document.getElementById("removeSelectedBtn").addEventListener("click", () => {
+        pushHistory();
+        state.instances = state.instances.filter(i => !selectedUids.has(i.uid));
+        state.notes = state.notes.filter(n => !selectedNoteUids.has(n.uid));
+        selectedUids.clear();
+        selectedNoteUids.clear();
+        renderBed();
+      });
+      return;
+    }
+
+    // Ebenen-/Sperren-Buttons gelten für die gesamte aktuelle Auswahl - bei
+    // gemischt gesperrter/ungesperrter Auswahl entscheidet das erste Objekt
+    // die Richtung des Sperr-Buttons (siehe toggleLockedForSelection).
+    const firstSelInst = state.instances.find(i => i.uid === [...selectedUids][0]);
+    const isLocked = !!(firstSelInst && firstSelInst.locked);
+    const layerButtons = `
+      <button id="sendBackBtn" title="${t("tooltip_send_back")}">⬇️</button>
+      <button id="moveBackwardBtn" title="${t("tooltip_move_backward")}">🔽</button>
+      <button id="moveForwardBtn" title="${t("tooltip_move_forward")}">🔼</button>
+      <button id="bringFrontBtn" title="${t("tooltip_bring_front")}">⬆️</button>
+      <button id="toggleLockBtn" title="${isLocked ? t("tooltip_unlock") : t("tooltip_lock")}">${isLocked ? "🔓" : "🔒"}</button>
+    `;
+
+    if(selectedUids.size === 1){
+      const uid = [...selectedUids][0];
+      const inst = state.instances.find(i => i.uid === uid);
+      const item = ITEM_BY_ID[inst.itemId];
+      selectionBarEl.innerHTML = `
+        <span>${itemVisualHtml(item, 16)} ${t("selection_one_selected", {name: `<strong>${item.name}</strong>`, x: Math.round(inst.x), y: Math.round(inst.y)})}</span>
+        ${layerButtons}
+        <button id="removeSelectedBtn">${t("btn_remove")}</button>
+      `;
+    } else {
+      selectionBarEl.innerHTML = `
+        <span>🔢 ${t("selection_many_selected", {count: `<strong>${selectedUids.size}</strong>`})}</span>
+        ${layerButtons}
+        <button id="removeSelectedBtn">${t("btn_remove_all")}</button>
+      `;
+    }
+    document.getElementById("removeSelectedBtn").addEventListener("click", () => {
+      pushHistory();
+      state.instances = state.instances.filter(i => !selectedUids.has(i.uid));
+      selectedUids.clear();
+      renderBed();
+    });
+    document.getElementById("sendBackBtn").addEventListener("click", () => sendUidsToBack([...selectedUids]));
+    document.getElementById("moveBackwardBtn").addEventListener("click", () => moveUidsOneStep([...selectedUids], "backward"));
+    document.getElementById("moveForwardBtn").addEventListener("click", () => moveUidsOneStep([...selectedUids], "forward"));
+    document.getElementById("bringFrontBtn").addEventListener("click", () => bringUidsToFront([...selectedUids]));
+    document.getElementById("toggleLockBtn").addEventListener("click", () => toggleLockedForSelection());
+  }
+
+  function armFill(itemId){
+    armedItemId = itemId;
+    fillLocked = false; // pro Flächenfüllung neu entscheiden, statt aus der letzten zu übernehmen
+    clearSelection();
+    bedSvg.classList.add("fill-armed");
+    renderPlantList();
+    renderSelectionBar();
+  }
+
+  function disarmFill(){
+    armedItemId = null;
+    bedSvg.classList.remove("fill-armed");
+    renderPlantList();
+    renderSelectionBar();
+  }
+
+  // Füllt ein aufgezogenes Rechteck (cm-Koordinaten) mit einem Raster des Items,
+  // basierend auf Reihen-/Pflanzabstand (Pflanzen) bzw. Breite/Höhe (Material).
+  function fillArea(itemId, x0, y0, x1, y1){
+    const item = ITEM_BY_ID[itemId];
+    const dims = getDims(item);
+    const stepX = dims.shape === "circle" ? (item.plantSpacingCm || dims.w) : dims.w;
+    const stepY = dims.shape === "circle" ? (item.rowSpacingCm || dims.h) : dims.h;
+
+    const width = x1 - x0, height = y1 - y0;
+    const cols = Math.max(1, Math.floor(width / stepX));
+    const rows = Math.max(1, Math.floor(height / stepY));
+
+    // Raster in der aufgezogenen Fläche zentrieren
+    const usedWidth = cols * stepX, usedHeight = rows * stepY;
+    const startX = x0 + (width - usedWidth) / 2 + stepX / 2;
+    const startY = y0 + (height - usedHeight) / 2 + stepY / 2;
+
+    pushHistory();
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        const newInst = {
+          uid: uidCounter++,
+          itemId: itemId,
+          x: startX + c * stepX,
+          y: startY + r * stepY
+        };
+        if(fillLocked) newInst.locked = true;
+        state.instances.push(newInst);
+      }
+    }
+    renderBed();
+  }
+
+  /* ---------------------------------------------------------------
+     5b) SPERREN / ENTSPERREN
+     Gesperrte Instanzen (inst.locked) sind weiterhin anklickbar/
+     auswählbar, aber nicht per Drag verschiebbar und werden von der
+     Marquee-Auswahl ausgenommen - gedacht für fixierte Flächen wie
+     Rasen, die nicht aus Versehen verrutschen sollen.
+  ----------------------------------------------------------------*/
+  // Setzt inst.locked für alle übergebenen uids auf denselben Wert (toggle,
+  // wenn value nicht angegeben: erstes Objekt der Auswahl entscheidet die
+  // Zielrichtung, damit "gemischte" Auswahl einheitlich wird statt zu toggeln).
+  function setLockedForUids(uids, value){
+    if(!uids.length) return;
+    pushHistory();
+    uids.forEach(uid => {
+      const inst = state.instances.find(i => i.uid === uid);
+      if(inst) inst.locked = value;
+    });
+    renderBed();
+  }
+
+  function toggleLockedForSelection(){
+    const uids = [...selectedUids];
+    if(!uids.length) return;
+    // Sind gemischt gesperrte/ungesperrte Objekte ausgewählt, orientiert sich
+    // die Aktion am ersten Objekt: ist es gesperrt, wird alles entsperrt (und
+    // umgekehrt) - so bekommt man aus uneinheitlicher Auswahl in einem Klick
+    // wieder einen einheitlichen Zustand, statt pro Objekt einzeln umzuschalten.
+    const firstInst = state.instances.find(i => i.uid === uids[0]);
+    const newValue = !(firstInst && firstInst.locked);
+    setLockedForUids(uids, newValue);
+  }
+
+  /* ---------------------------------------------------------------
+     5c) EBENEN-REIHENFOLGE (Vorder-/Hintergrund)
+     Die Zeichenreihenfolge im SVG entspricht 1:1 der Reihenfolge im
+     state.instances-Array (spätere Einträge = weiter vorn). Die
+     Funktionen unten verschieben also nur Array-Positionen; renderBed()
+     baut danach ganz normal neu auf.
+  ----------------------------------------------------------------*/
+  function bringUidsToFront(uids){
+    const uidSet = new Set(uids);
+    if(!uidSet.size) return;
+    pushHistory();
+    const moved = state.instances.filter(i => uidSet.has(i.uid));
+    const rest = state.instances.filter(i => !uidSet.has(i.uid));
+    state.instances = [...rest, ...moved]; // ans Ende = ganz nach vorne
+    renderBed();
+  }
+
+  function sendUidsToBack(uids){
+    const uidSet = new Set(uids);
+    if(!uidSet.size) return;
+    pushHistory();
+    const moved = state.instances.filter(i => uidSet.has(i.uid));
+    const rest = state.instances.filter(i => !uidSet.has(i.uid));
+    state.instances = [...moved, ...rest]; // an den Anfang = ganz nach hinten
+    renderBed();
+  }
+
+  // Verschiebt jedes ausgewählte Objekt um genau eine Ebene nach vorn/hinten
+  // (Tausch mit dem direkten Nachbarn). Bei Mehrfachauswahl von "vorn nach
+  // hinten" (bzw. umgekehrt) durchlaufen, damit sich die Objekte nicht
+  // gegenseitig blockieren und ihre relative Reihenfolge zueinander erhalten
+  // bleibt.
+  function moveUidsOneStep(uids, direction){
+    const uidSet = new Set(uids);
+    if(!uidSet.size) return;
+    pushHistory();
+    const arr = state.instances;
+    const indices = [];
+    arr.forEach((inst, idx) => { if(uidSet.has(inst.uid)) indices.push(idx); });
+    if(direction === "forward"){
+      // von hinten (hohe Indizes) nach vorn durchgehen, damit ein bereits
+      // verschobenes Objekt nicht sofort wieder mit dem nächsten kollidiert
+      for(let k = indices.length - 1; k >= 0; k--){
+        const i = indices[k];
+        if(i < arr.length - 1 && !uidSet.has(arr[i+1].uid)){
+          [arr[i], arr[i+1]] = [arr[i+1], arr[i]];
+        }
+      }
+    } else {
+      for(let k = 0; k < indices.length; k++){
+        const i = indices[k];
+        if(i > 0 && !uidSet.has(arr[i-1].uid)){
+          [arr[i], arr[i-1]] = [arr[i-1], arr[i]];
+        }
+      }
+    }
+    renderBed();
+  }
+
+  /* ---------------------------------------------------------------
+     5d) RECHTSKLICK-KONTEXTMENÜ
+     Generische Liste, die sich je nach angeklicktem Objekt/Auswahl
+     zusammenstellt - aktuell Sperren/Entsperren + Ebenen-Reihenfolge,
+     später leicht um weitere Aktionen erweiterbar.
+  ----------------------------------------------------------------*/
+  const contextMenuEl = document.getElementById("objectContextMenu");
+
+  function closeContextMenu(){
+    contextMenuEl.hidden = true;
+    contextMenuEl.innerHTML = "";
+  }
+
+  function openContextMenuFor(uid, clientX, clientY){
+    // Rechtsklick auf ein noch nicht ausgewähltes Objekt: Auswahl darauf
+    // umstellen (wie man es von Datei-Managern & Grafikprogrammen kennt),
+    // Rechtsklick auf ein bereits ausgewähltes Objekt lässt die
+    // Mehrfachauswahl unangetastet.
+    if(!selectedUids.has(uid)){
+      const g = bedSvg.querySelector(`.plant-mark[data-uid="${uid}"]`);
+      selectInstance(uid, g, false);
+    }
+    const uids = [...selectedUids];
+    const allLocked = uids.every(u => {
+      const inst = state.instances.find(i => i.uid === u);
+      return inst && inst.locked;
+    });
+
+    contextMenuEl.innerHTML = `
+      <button id="ctxBringFront">⬆️ ${t("ctx_bring_front")}</button>
+      <button id="ctxMoveForward">🔼 ${t("ctx_move_forward")}</button>
+      <button id="ctxMoveBackward">🔽 ${t("ctx_move_backward")}</button>
+      <button id="ctxSendBack">⬇️ ${t("ctx_send_back")}</button>
+      <hr>
+      <button id="ctxToggleLock">${allLocked ? "🔓 " + t("ctx_unlock") : "🔒 " + t("ctx_lock")}</button>
+    `;
+    contextMenuEl.querySelector("#ctxBringFront").addEventListener("click", () => { bringUidsToFront(uids); closeContextMenu(); });
+    contextMenuEl.querySelector("#ctxMoveForward").addEventListener("click", () => { moveUidsOneStep(uids, "forward"); closeContextMenu(); });
+    contextMenuEl.querySelector("#ctxMoveBackward").addEventListener("click", () => { moveUidsOneStep(uids, "backward"); closeContextMenu(); });
+    contextMenuEl.querySelector("#ctxSendBack").addEventListener("click", () => { sendUidsToBack(uids); closeContextMenu(); });
+    contextMenuEl.querySelector("#ctxToggleLock").addEventListener("click", () => { setLockedForUids(uids, !allLocked); closeContextMenu(); });
+
+    contextMenuEl.hidden = false;
+    // Erst nach dem Einblenden messen (getBoundingClientRect braucht das
+    // gerenderte Layout), dann innerhalb des Viewports positionieren -
+    // gleiches Muster wie beim Notiz-Style-Popover.
+    const menuRect = contextMenuEl.getBoundingClientRect();
+    let left = clientX, top = clientY;
+    if(left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - menuRect.width - 8;
+    if(top + menuRect.height > window.innerHeight - 8) top = window.innerHeight - menuRect.height - 8;
+    contextMenuEl.style.left = Math.max(8, left) + "px";
+    contextMenuEl.style.top = Math.max(8, top) + "px";
+  }
+
+  function attachContextMenuHandler(g, uid){
+    g.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openContextMenuFor(uid, e.clientX, e.clientY);
+    });
+  }
+
+  document.addEventListener("pointerdown", (e) => {
+    if(contextMenuEl.hidden) return;
+    if(e.target.closest("#objectContextMenu")) return;
+    closeContextMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && !contextMenuEl.hidden) closeContextMenu();
+  });
+  // Beim Scrollen/Zoomen des Rasters wäre die Menüposition sofort falsch -
+  // einfacher, das Menü dann zu schließen, als es mitzuverfolgen.
+  document.addEventListener("scroll", () => { if(!contextMenuEl.hidden) closeContextMenu(); }, true);
+
+  /* ---------------------------------------------------------------
+     6) KOORDINATEN-HILFE: Client-Pixel -> SVG-Nutzereinheiten (cm)
+  ----------------------------------------------------------------*/
+  function clientToSvgPoint(clientX, clientY){
+    const pt = bedSvg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const ctm = bedSvg.getScreenCTM();
+    if(!ctm) return {x:0, y:0};
+    const p = pt.matrixTransform(ctm.inverse());
+    return {x: p.x, y: p.y};
+  }
+
+  function isPointOverBed(clientX, clientY){
+    const rect = bedSvg.getBoundingClientRect();
+    return clientX >= rect.left && clientX <= rect.right &&
+           clientY >= rect.top && clientY <= rect.bottom;
+  }
+
+  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+  // Hellt/dunkelt eine Hex-Farbe um percent% ab (negativ = dunkler). Dient dazu,
+  // aus der gewählten Notiz-Hintergrundfarbe automatisch einen passenden,
+  // etwas dunkleren Rahmenton abzuleiten, ohne dass die Anwenderin eine
+  // zweite Farbe separat einstellen muss.
+  function shadeColor(hex, percent){
+    const m = hex.replace("#", "");
+    const num = parseInt(m.length === 3 ? m.split("").map(c => c+c).join("") : m, 16);
+    let r = (num >> 16) + Math.round(255 * percent / 100);
+    let g = ((num >> 8) & 0x00FF) + Math.round(255 * percent / 100);
+    let b = (num & 0x0000FF) + Math.round(255 * percent / 100);
+    r = clamp(r, 0, 255); g = clamp(g, 0, 255); b = clamp(b, 0, 255);
+    return "#" + (0x1000000 + r*0x10000 + g*0x100 + b).toString(16).slice(1);
+  }
+
+  // Berechnet die relative Luminanz (0 = schwarz, 1 = weiß) einer Hex-Farbe.
+  // Dient dazu, für eine gegebene Hintergrundfarbe automatisch zu entscheiden,
+  // ob helle oder dunkle Rasterlinien besser lesbar sind.
+  function getLuminance(hex){
+    const m = hex.replace("#", "");
+    const num = parseInt(m.length === 3 ? m.split("").map(c => c+c).join("") : m, 16);
+    const r = (num >> 16) & 0xFF, g = (num >> 8) & 0xFF, b = num & 0xFF;
+    // Standard-Gewichtung (Rec. 601-ähnlich), reicht hier für eine
+    // einfache Hell/Dunkel-Entscheidung völlig aus.
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+
+  // Setzt die Rasterlinienfarbe passend zur aktuellen Hintergrundfarbe.
+  // Statt einer harten Schwelle (hell/dunkel) wird stufenlos zwischen zwei
+  // Eckfarben interpoliert, abhängig von der Luminanz des Hintergrunds:
+  // L=0 (Schwarz) -> kräftige helle Linie, L=1 (Weiß) -> dezente dunkle Linie.
+  // So gibt es keinen abrupten Sprung mehr beim Durchfahren der Farbskala.
+  function updateGridLineColor(){
+    const t = getLuminance(state.canvasBg); // 0 = schwarz ... 1 = weiß
+    // Eckfarben (RGB + Deckkraft), an den bisher bewährten Werten orientiert:
+    const light = { r:255, g:255, b:255, a:0.8 }; // für sehr dunkle Hintergründe
+    const dark  = { r:74,  g:58,  b:42,  a:0.3 };  // für sehr helle Hintergründe
+    const r = Math.round(light.r + (dark.r - light.r) * t);
+    const g = Math.round(light.g + (dark.g - light.g) * t);
+    const b = Math.round(light.b + (dark.b - light.b) * t);
+    const a = (light.a + (dark.a - light.a) * t).toFixed(2);
+    document.documentElement.style.setProperty("--color-grid-line", `rgba(${r},${g},${b},${a})`);
+  }
+
+  /* ---------------------------------------------------------------
+     7) DRAG AUS DER SIDEBAR (neues Item platzieren)
+  ----------------------------------------------------------------*/
+  function attachCardDragHandlers(card, itemId){
+    let ghost = null;
+    let startX, startY, dragging = false;
+    let pointerId = null;
+
+    card.addEventListener("pointerdown", (e) => {
+      startX = e.clientX; startY = e.clientY;
+      dragging = false;
+      pointerId = e.pointerId;
+      card.setPointerCapture(pointerId);
+
+      function onMove(ev){
+        const dx = ev.clientX - startX, dy = ev.clientY - startY;
+        if(!dragging && Math.hypot(dx, dy) > 5){
+          dragging = true;
+          const item = ITEM_BY_ID[itemId];
+          ghost = document.createElement("div");
+          ghost.className = "drag-ghost";
+          ghost.innerHTML = `<span>${itemVisualHtml(item, 18)}</span><span>${item.name}</span>`;
+          document.body.appendChild(ghost);
+        }
+        if(dragging && ghost){
+          ghost.style.left = (ev.clientX + 12) + "px";
+          ghost.style.top = (ev.clientY + 12) + "px";
+        }
+      }
+
+      function onUp(ev){
+        card.releasePointerCapture(pointerId);
+        card.removeEventListener("pointermove", onMove);
+        card.removeEventListener("pointerup", onUp);
+        card.removeEventListener("pointercancel", onUp);
+
+        if(dragging){
+          if(isPointOverBed(ev.clientX, ev.clientY)){
+            const p = clientToSvgPoint(ev.clientX, ev.clientY);
+            const item = ITEM_BY_ID[itemId];
+            const dims = getDims(item);
+            pushHistory();
+            state.instances.push({
+              uid: uidCounter++,
+              itemId: itemId,
+              x: clamp(p.x, dims.w/2, state.bedWidth - dims.w/2),
+              y: clamp(p.y, dims.h/2, state.bedHeight - dims.h/2)
+            });
+            renderBed();
+          }
+          if(ghost){ ghost.remove(); ghost = null; }
+        } else {
+          renderDetailPanel(ITEM_BY_ID[itemId]);
+        }
+      }
+
+      card.addEventListener("pointermove", onMove);
+      card.addEventListener("pointerup", onUp);
+      card.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  /* ---------------------------------------------------------------
+     8) PLATZIERTES ITEM: verschieben / auswählen
+     Wichtig: Versatz zwischen Klickpunkt und Mittelpunkt merken,
+     damit das Item nicht beim Anfassen "springt".
+  ----------------------------------------------------------------*/
+  function attachInstancePointerHandlers(g, uid){
+    let pointerId = null;
+
+    g.addEventListener("pointerdown", (e) => {
+      if(e.button === 2) return; // Rechtsklick: eigener Kontextmenü-Handler ist zuständig, kein Drag/Select hier
+      e.stopPropagation();
+      pointerId = e.pointerId;
+      g.setPointerCapture(pointerId);
+      const withShift = e.shiftKey; // Shift-Klick = zur Mehrfachauswahl hinzufügen/entfernen
+
+      const inst = state.instances.find(i => i.uid === uid);
+
+      // Gesperrte Instanzen bleiben anklickbar/auswählbar (z.B. um sie über die
+      // Statusleiste oder das Kontextmenü wieder zu entsperren), lassen sich
+      // aber nicht ziehen - daher hier direkt kurzschließen, ohne Move-Handler.
+      if(inst.locked){
+        selectInstance(uid, g, withShift);
+        g.releasePointerCapture(pointerId);
+        return;
+      }
+
+      const startClientX = e.clientX, startClientY = e.clientY;
+      const startSvg = clientToSvgPoint(startClientX, startClientY);
+      const offsetX = inst.x - startSvg.x;
+      const offsetY = inst.y - startSvg.y;
+      // Fixe Startposition des angefassten Objekts merken - inst.x/y ändern sich
+      // während des Gruppenziehens live mit (inst ist selbst Teil von groupMembers),
+      // deshalb NICHT inst.x/y für die Delta-Berechnung verwenden, sondern diese Kopie.
+      const grabStartX = inst.x, grabStartY = inst.y;
+      let moved = false;
+
+      // Gemeinsames Verschieben: wenn das angefasste Objekt Teil einer
+      // Mehrfachauswahl ist (und nicht Shift gedrückt ist), alle Objekte der
+      // Auswahl mitziehen. Dafür merken wir uns für jedes betroffene Objekt
+      // seine DOM-Gruppe + Startposition, um den gleichen Delta anzuwenden.
+      const isGroupDrag = !withShift && selectedUids.has(uid) && selectedUids.size > 1;
+      let groupMembers = null;
+      if(isGroupDrag){
+        groupMembers = [...selectedUids].map(memberUid => {
+          const memberInst = state.instances.find(i => i.uid === memberUid);
+          const memberG = bedSvg.querySelector(`.plant-mark[data-uid="${memberUid}"]`);
+          return memberInst && memberG ? { inst: memberInst, g: memberG, startX: memberInst.x, startY: memberInst.y } : null;
+        }).filter(Boolean);
+      }
+
+      function onMove(ev){
+        const dx = ev.clientX - startClientX, dy = ev.clientY - startClientY;
+        if(!moved && Math.hypot(dx, dy) > 3){
+          moved = true;
+          pushHistory(); // genau einmal pro Drag - beim Übergang von "nur geklickt" zu "wird gezogen"
+        }
+        if(moved){
+          const p = clientToSvgPoint(ev.clientX, ev.clientY);
+          if(groupMembers){
+            // Delta in cm relativ zur FIXEN Startposition des angefassten Objekts
+            const deltaX = (p.x + offsetX) - grabStartX;
+            const deltaY = (p.y + offsetY) - grabStartY;
+            groupMembers.forEach(m => {
+              const mItem = ITEM_BY_ID[m.inst.itemId];
+              const mDims = getDims(mItem);
+              m.inst.x = clamp(m.startX + deltaX, mDims.w/2, state.bedWidth - mDims.w/2);
+              m.inst.y = clamp(m.startY + deltaY, mDims.h/2, state.bedHeight - mDims.h/2);
+              positionMark(m.g, mItem, m.inst.x, m.inst.y);
+            });
+          } else {
+            const item = ITEM_BY_ID[inst.itemId];
+            const dims = getDims(item);
+            inst.x = clamp(p.x + offsetX, dims.w/2, state.bedWidth - dims.w/2);
+            inst.y = clamp(p.y + offsetY, dims.h/2, state.bedHeight - dims.h/2);
+            // Nur die Position dieses einen Markers aktualisieren, NICHT das ganze
+            // SVG neu aufbauen - sonst geht die Pointer-Capture verloren (Ruckel-Bug).
+            positionMark(g, item, inst.x, inst.y);
+          }
+        }
+      }
+      function onUp(){
+        g.releasePointerCapture(pointerId);
+        g.removeEventListener("pointermove", onMove);
+        g.removeEventListener("pointerup", onUp);
+        g.removeEventListener("pointercancel", onUp);
+        // Beim Ziehen (moved=true) ohne Shift NICHT die Mehrfachauswahl aufheben,
+        // falls das gezogene Objekt bereits Teil davon war - sonst verliert man
+        // beim Verschieben einer Gruppe versehentlich die anderen Markierungen.
+        if(moved && isGroupDrag){
+          renderSelectionBar();
+          return;
+        }
+        selectInstance(uid, g, withShift);
+      }
+      g.addEventListener("pointermove", onMove);
+      g.addEventListener("pointerup", onUp);
+      g.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  // Rechteck aufziehen, wenn ein Item "bewaffnet" ist (Flächenfüllung)
+  bedSvg.addEventListener("pointerdown", (e) => {
+    if(!armedItemId) return;
+    e.preventDefault();
+    const pointerId = e.pointerId;
+    bedSvg.setPointerCapture(pointerId);
+
+    const startSvg = clientToSvgPoint(e.clientX, e.clientY);
+    const item = ITEM_BY_ID[armedItemId];
+    const dims = getDims(item);
+    // Gleiche Schrittweiten wie in fillArea() - so stimmt die Live-Anzeige
+    // exakt mit dem überein, was beim Loslassen tatsächlich gesetzt wird.
+    const stepX = dims.shape === "circle" ? (item.plantSpacingCm || dims.w) : dims.w;
+    const stepY = dims.shape === "circle" ? (item.rowSpacingCm || dims.h) : dims.h;
+
+    const previewRect = document.createElementNS(SVG_NS, "rect");
+    previewRect.setAttribute("fill", "rgba(255,255,255,0.15)");
+    previewRect.setAttribute("stroke", item.accent);
+    previewRect.setAttribute("stroke-width", "2");
+    previewRect.setAttribute("stroke-dasharray", "6 4");
+    previewRect.setAttribute("x", startSvg.x);
+    previewRect.setAttribute("y", startSvg.y);
+    previewRect.setAttribute("width", 0);
+    previewRect.setAttribute("height", 0);
+    bedSvg.appendChild(previewRect);
+
+    // Maß-Anzeige: zeigt Breite×Höhe in cm sowie die Anzahl Spalten×Reihen,
+    // die bei diesen Maßen tatsächlich hineinpassen - genau das, was beim
+    // Loslassen gepflanzt wird. Als kleines Schild an der Ecke des Rechtecks,
+    // damit man bei schmalen Objekten nicht "aus Versehen" eine Reihe zu viel
+    // aufzieht.
+    const labelPadX = 6, labelPadY = 4, labelHeight = 18;
+    const measureLabelBg = document.createElementNS(SVG_NS, "rect");
+    measureLabelBg.setAttribute("class", "measure-label-bg");
+    measureLabelBg.setAttribute("height", labelHeight);
+    measureLabelBg.setAttribute("rx", 3);
+    const measureLabelText = document.createElementNS(SVG_NS, "text");
+    measureLabelText.setAttribute("class", "measure-label-text");
+    bedSvg.appendChild(measureLabelBg);
+    bedSvg.appendChild(measureLabelText);
+
+    function updateMeasureLabel(r){
+      const w = Math.round(r.x1 - r.x0), h = Math.round(r.y1 - r.y0);
+      const cols = Math.max(1, Math.floor(w / stepX));
+      const rows = Math.max(1, Math.floor(h / stepY));
+      measureLabelText.textContent = t("measure_label", {w, h, cols, rows});
+
+      // Skaliert die Schrift so, dass sie im aktuellen Zoom lesbar bleibt
+      // (das SVG-Koordinatensystem ist in cm, nicht in Bildschirmpixeln).
+      const fontSizeCm = 13 / state.displayScale;
+      measureLabelText.setAttribute("font-size", fontSizeCm);
+      const padXCm = labelPadX / state.displayScale;
+      const padYCm = labelPadY / state.displayScale;
+      const labelHCm = (labelHeight) / state.displayScale;
+
+      // Über der linken oberen Ecke des Rechtecks platzieren, außer das würde
+      // über den oberen Bildrand hinausragen - dann stattdessen knapp innerhalb.
+      let labelY = r.y0 - labelHCm - 2 / state.displayScale;
+      if(labelY < 0) labelY = r.y0 + 2 / state.displayScale;
+
+      // Hintergrund-Box an die tatsächliche Textbreite anpassen (erst nach dem
+      // Setzen des Textinhalts messbar) - wird hier vorgezogen, weil die
+      // Breite auch für die horizontale Randkorrektur gebraucht wird.
+      const textWidth = measureLabelText.getBBox().width;
+      const labelWCm = textWidth + padXCm * 2;
+
+      // Genau wie beim oberen Rand: ragt das Schild rechts über den Beetrand
+      // hinaus (viewBox-Grenze, dort wird sonst abgeschnitten), wird es nach
+      // links gerückt, damit es komplett sichtbar bleibt.
+      let labelX = r.x0;
+      if(labelX + labelWCm > state.bedWidth) labelX = state.bedWidth - labelWCm;
+      if(labelX < 0) labelX = 0; // Sicherheitsnetz bei sehr schmalem Beet
+
+      measureLabelText.setAttribute("x", labelX + padXCm);
+      measureLabelText.setAttribute("y", labelY + labelHCm - padYCm);
+
+      measureLabelBg.setAttribute("x", labelX);
+      measureLabelBg.setAttribute("y", labelY);
+      measureLabelBg.setAttribute("width", labelWCm);
+      measureLabelBg.setAttribute("height", labelHCm);
+    }
+
+    function normalizedRect(clientX, clientY){
+      const cur = clientToSvgPoint(clientX, clientY);
+      return {
+        x0: Math.min(startSvg.x, cur.x), x1: Math.max(startSvg.x, cur.x),
+        y0: Math.min(startSvg.y, cur.y), y1: Math.max(startSvg.y, cur.y)
+      };
+    }
+
+    function onMove(ev){
+      const r = normalizedRect(ev.clientX, ev.clientY);
+      previewRect.setAttribute("x", r.x0);
+      previewRect.setAttribute("y", r.y0);
+      previewRect.setAttribute("width", r.x1 - r.x0);
+      previewRect.setAttribute("height", r.y1 - r.y0);
+      updateMeasureLabel(r);
+    }
+    function cleanup(){
+      bedSvg.releasePointerCapture(pointerId);
+      bedSvg.removeEventListener("pointermove", onMove);
+      bedSvg.removeEventListener("pointerup", onUp);
+      bedSvg.removeEventListener("pointercancel", onCancel);
+      previewRect.remove();
+      measureLabelBg.remove();
+      measureLabelText.remove();
+    }
+    function onUp(ev){
+      const r = normalizedRect(ev.clientX, ev.clientY);
+      const x0 = clamp(r.x0, 0, state.bedWidth), x1 = clamp(r.x1, 0, state.bedWidth);
+      const y0 = clamp(r.y0, 0, state.bedHeight), y1 = clamp(r.y1, 0, state.bedHeight);
+      cleanup();
+      if((x1 - x0) > 5 && (y1 - y0) > 5){
+        fillArea(armedItemId, x0, y0, x1, y1);
+      }
+    }
+    function onCancel(){ cleanup(); }
+
+    bedSvg.addEventListener("pointermove", onMove);
+    bedSvg.addEventListener("pointerup", onUp);
+    bedSvg.addEventListener("pointercancel", onCancel);
+  });
+
+  // Klick+Ziehen auf leeren Hintergrund (kein Objekt, nicht "bewaffnet"):
+  // verschiebt normalerweise den sichtbaren Ausschnitt (Pan). Hält man dabei
+  // Strg oder Shift gedrückt, wird stattdessen ein Auswahlrechteck (Marquee)
+  // aufgezogen: alle Objekte, deren Mittelpunkt im Rechteck liegt, werden
+  // ausgewählt. Ein Klick OHNE Bewegung hebt die aktuelle Auswahl auf -
+  // Unterscheidung über dieselbe Bewegungsschwelle wie beim Objekt-Verschieben,
+  // damit sich beides nicht in die Quere kommt.
+  bedSvg.addEventListener("pointerdown", (e) => {
+    if(armedItemId) return; // Flächenfüllung hat eigenen Handler (oben) und Vorrang
+    if(e.target.closest(".plant-mark")) return; // Klick auf ein Objekt - dessen eigener Handler ist zuständig
+    if(e.target.closest(".note-mark")) return; // Klick auf einen Notizzettel - dessen eigener Handler ist zuständig
+
+    const isMarquee = e.ctrlKey || e.shiftKey;
+    const pointerId = e.pointerId;
+    bedSvg.setPointerCapture(pointerId);
+
+    const startClientX = e.clientX, startClientY = e.clientY;
+    const startScrollLeft = canvasScrollEl.scrollLeft;
+    const startScrollTop = canvasScrollEl.scrollTop;
+    let moved = false;
+
+    // -------- Marquee-Auswahl (Strg/Shift + Ziehen) --------
+    let marqueeRect = null;
+    const startSvg = isMarquee ? clientToSvgPoint(startClientX, startClientY) : null;
+    // Bestehende Auswahl merken, damit Shift/Strg sie erweitert statt ersetzt
+    // (praktisch, um z.B. nach einem Einzel-Klick weitere Objekte hinzuzufügen).
+    const preExistingSelection = isMarquee ? new Set(selectedUids) : null;
+    const preExistingNoteSelection = isMarquee ? new Set(selectedNoteUids) : null;
+
+    function svgRectFrom(clientX, clientY){
+      const cur = clientToSvgPoint(clientX, clientY);
+      return {
+        x0: Math.min(startSvg.x, cur.x), x1: Math.max(startSvg.x, cur.x),
+        y0: Math.min(startSvg.y, cur.y), y1: Math.max(startSvg.y, cur.y)
+      };
+    }
+
+    function applyMarqueeSelection(r){
+      selectedUids = new Set(preExistingSelection);
+      state.instances.forEach(inst => {
+        if(inst.locked) return; // gesperrte Objekte per Marquee nicht mit-einsammeln
+        if(inst.x >= r.x0 && inst.x <= r.x1 && inst.y >= r.y0 && inst.y <= r.y1){
+          selectedUids.add(inst.uid);
+        }
+      });
+      selectedNoteUids = new Set(preExistingNoteSelection);
+      state.notes.forEach(note => {
+        if(note.x >= r.x0 && note.x <= r.x1 && note.y >= r.y0 && note.y <= r.y1){
+          selectedNoteUids.add(note.uid);
+        }
+      });
+      bedSvg.querySelectorAll(".plant-mark").forEach(el => {
+        const uid = Number(el.dataset.uid);
+        el.classList.toggle("selected", selectedUids.has(uid));
+      });
+      bedSvg.querySelectorAll(".note-mark").forEach(el => {
+        const uid = Number(el.dataset.noteUid);
+        el.classList.toggle("selected", selectedNoteUids.has(uid));
+      });
+      renderSelectionBar();
+      if(selectedUids.size === 1 && !selectedNoteUids.size){
+        const uid = [...selectedUids][0];
+        const inst = state.instances.find(i => i.uid === uid);
+        if(inst) setActiveCard(inst.itemId);
+      } else {
+        setActiveCard(null);
+      }
+    }
+
+    function onMove(ev){
+      const dx = ev.clientX - startClientX, dy = ev.clientY - startClientY;
+      if(!moved && Math.hypot(dx, dy) > 3){
+        moved = true;
+        if(isMarquee){
+          marqueeRect = document.createElementNS(SVG_NS, "rect");
+          marqueeRect.setAttribute("class", "marquee-rect");
+          bedSvg.appendChild(marqueeRect);
+        } else {
+          bedSvg.classList.add("panning");
+        }
+      }
+      if(!moved) return;
+      if(isMarquee){
+        const r = svgRectFrom(ev.clientX, ev.clientY);
+        marqueeRect.setAttribute("x", r.x0);
+        marqueeRect.setAttribute("y", r.y0);
+        marqueeRect.setAttribute("width", r.x1 - r.x0);
+        marqueeRect.setAttribute("height", r.y1 - r.y0);
+        applyMarqueeSelection(r);
+      } else {
+        canvasScrollEl.scrollLeft = startScrollLeft - dx;
+        canvasScrollEl.scrollTop = startScrollTop - dy;
+      }
+    }
+    function onUp(){
+      bedSvg.releasePointerCapture(pointerId);
+      bedSvg.removeEventListener("pointermove", onMove);
+      bedSvg.removeEventListener("pointerup", onUp);
+      bedSvg.removeEventListener("pointercancel", onUp);
+      bedSvg.classList.remove("panning");
+      if(marqueeRect) marqueeRect.remove();
+      if(!moved){
+        // Reiner Klick ohne Ziehen: Auswahl aufheben (auch bei gehaltenem
+        // Strg/Shift - ohne Bewegung gibt es kein Rechteck zum Auswerten).
+        clearSelection();
+      }
+    }
+    bedSvg.addEventListener("pointermove", onMove);
+    bedSvg.addEventListener("pointerup", onUp);
+    bedSvg.addEventListener("pointercancel", onUp);
+  });
+
+  // Entfernen per Entf-/Backspace-Taste, Esc beendet die Flächenfüllung,
+  // Strg+Z = Rückgängig, Strg+Y bzw. Strg+Shift+Z = Wiederherstellen
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && armedItemId){
+      disarmFill();
+      return;
+    }
+    const isTyping = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+    if((e.ctrlKey || e.metaKey) && !isTyping){
+      const key = e.key.toLowerCase();
+      if(key === "z" && !e.shiftKey){ e.preventDefault(); undo(); return; }
+      if(key === "y" || (key === "z" && e.shiftKey)){ e.preventDefault(); redo(); return; }
+    }
+    if((e.key === "Delete" || e.key === "Backspace") && (selectedUids.size || selectedNoteUids.size)){
+      if(!isTyping){
+        pushHistory();
+        state.instances = state.instances.filter(i => !selectedUids.has(i.uid));
+        state.notes = state.notes.filter(n => !selectedNoteUids.has(n.uid));
+        selectedUids.clear();
+        selectedNoteUids.clear();
+        renderBed();
+      }
+    }
+  });
+
+  // Fadenkreuz-Cursor, solange Strg gedrückt gehalten wird - signalisiert,
+  // dass ein Klick+Ziehen auf der Freifläche jetzt ein Marquee (Auswahlrechteck)
+  // statt eines Kamera-Schwenks (Pan) aufzieht. Auf keydown UND keyup geprüft,
+  // damit der Cursor exakt der gehaltenen Taste folgt, unabhängig vom Klick.
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Control") bedSvg.classList.add("ctrl-armed");
+  });
+  document.addEventListener("keyup", (e) => {
+    if(e.key === "Control") bedSvg.classList.remove("ctrl-armed");
+  });
+  // Sicherheitsnetz: verliert das Fenster den Fokus (z.B. Alt-Tab) während
+  // Strg gehalten wird, bleibt sonst kein keyup-Event mehr - Cursor zurücksetzen.
+  window.addEventListener("blur", () => bedSvg.classList.remove("ctrl-armed"));
+
+  /* ---------------------------------------------------------------
+     8b) ZOOM: Regler, Prozentanzeige, Reset, Strg+Mausrad
+     Beim Zoomen wird der Scroll-Offset so nachgeführt, dass der Punkt
+     unter dem Mauszeiger (bzw. bei Regler/Button die Canvas-Mitte)
+     stehen bleibt - fühlt sich sonst "wegrutschend" an.
+  ----------------------------------------------------------------*/
+  function setZoom(newScale, focalClientX, focalClientY){
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newScale));
+    if(clamped === state.displayScale) return;
+
+    // Fokuspunkt in Bildschirmkoordinaten relativ zum sichtbaren Ausschnitt
+    const rect = canvasScrollEl.getBoundingClientRect();
+    const fx = (focalClientX != null) ? focalClientX - rect.left : rect.width / 2;
+    const fy = (focalClientY != null) ? focalClientY - rect.top : rect.height / 2;
+
+    // Punkt im Garten (cm), der aktuell unter dem Fokuspunkt liegt
+    const gardenX = (canvasScrollEl.scrollLeft + fx) / state.displayScale;
+    const gardenY = (canvasScrollEl.scrollTop + fy) / state.displayScale;
+
+    state.displayScale = clamped;
+    renderBed();
+
+    // Scroll so setzen, dass derselbe Gartenpunkt wieder unter dem Fokuspunkt liegt
+    canvasScrollEl.scrollLeft = gardenX * state.displayScale - fx;
+    canvasScrollEl.scrollTop = gardenY * state.displayScale - fy;
+
+    syncZoomUi();
+  }
+
+  function syncZoomUi(){
+    const pct = Math.round(state.displayScale * 100);
+    zoomRangeEl.value = pct;
+    zoomLabelEl.textContent = pct + "%";
+  }
+
+  zoomRangeEl.addEventListener("input", () => {
+    setZoom(zoomRangeEl.value / 100);
+  });
+
+  canvasBgInputEl.addEventListener("input", () => {
+    state.canvasBg = canvasBgInputEl.value;
+    document.documentElement.style.setProperty("--color-canvas", state.canvasBg);
+    updateGridLineColor();
+  });
+
+  function syncCanvasBgUi(){
+    canvasBgInputEl.value = state.canvasBg;
+    document.documentElement.style.setProperty("--color-canvas", state.canvasBg);
+    updateGridLineColor();
+  }
+
+  function syncGridToggleUi(){
+    toggleGridBtn.classList.toggle("active", state.showGrid);
+  }
+
+  toggleGridBtn.addEventListener("click", () => {
+    state.showGrid = !state.showGrid;
+    syncGridToggleUi();
+    renderBed();
+  });
+  syncGridToggleUi();
+  syncCanvasBgUi();
+
+  /* ---------------------------------------------------------------
+     HINTERGRUNDBILD
+     Wird als Base64-Data-URL eingebettet (wie Pflanzenbilder), nicht als
+     externe URL - sonst würde der PNG-Export am "tainted canvas"-Problem
+     scheitern (siehe exportBedAsPng). Die reale Pixelgröße (1px=1cm) wird
+     beim Einlesen einmalig ermittelt und mit abgespeichert, damit das
+     Kachel-Pattern in renderBed() ohne erneutes Laden auskommt.
+  ----------------------------------------------------------------*/
+  function closeBgImagePopover(){
+    bgImagePopover.hidden = true;
+  }
+
+  bgImageBtn.addEventListener("click", () => {
+    // Erneuter Klick auf den Knopf schließt das Popover wieder (Toggle),
+    // gleiches Muster wie beim Notiz-Style-Popover.
+    if(!bgImagePopover.hidden){ closeBgImagePopover(); return; }
+
+    document.getElementById("bgImageChooseLabel").textContent = t("bg_image_choose");
+    const removeBtn = document.getElementById("bgImageRemoveBtn");
+    document.getElementById("bgImageRemoveLabel").textContent = t("bg_image_remove");
+    removeBtn.disabled = !state.bgImage; // nichts zu entfernen, wenn noch kein Bild gesetzt ist
+
+    const toggleBtn = document.getElementById("bgImageToggleBtn");
+    document.getElementById("bgImageToggleLabel").textContent = state.bgImageVisible ? t("bg_image_hide") : t("bg_image_show");
+    toggleBtn.disabled = !state.bgImage; // nichts zum Ein-/Ausblenden ohne gesetztes Bild
+
+    const btnRect = bgImageBtn.getBoundingClientRect();
+    bgImagePopover.hidden = false;
+    const popRect = bgImagePopover.getBoundingClientRect();
+    let left = btnRect.left;
+    let top = btnRect.bottom + 6;
+    if(left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
+    if(top + popRect.height > window.innerHeight - 8) top = btnRect.top - popRect.height - 6;
+    bgImagePopover.style.left = Math.max(8, left) + "px";
+    bgImagePopover.style.top = Math.max(8, top) + "px";
+  });
+
+  document.getElementById("bgImageChooseBtn").addEventListener("click", () => {
+    bgImageFileInput.value = ""; // erlaubt erneute Auswahl derselben Datei
+    bgImageFileInput.click();
+  });
+
+  document.getElementById("bgImageToggleBtn").addEventListener("click", () => {
+    if(!state.bgImage) return;
+    state.bgImageVisible = !state.bgImageVisible;
+    closeBgImagePopover();
+    renderBed();
+  });
+
+  document.getElementById("bgImageRemoveBtn").addEventListener("click", () => {
+    if(!state.bgImage) return;
+    state.bgImage = null;
+    closeBgImagePopover();
+    renderBed();
+  });
+
+  bgImageFileInput.addEventListener("change", () => {
+    const file = bgImageFileInput.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      // Echte Pixelmaße ermitteln (1px = 1cm), bevor die Kachel im SVG
+      // angelegt wird - ohne width/height kann patternUnits="userSpaceOnUse"
+      // die Kachelgröße nicht kennen.
+      const probeImg = new Image();
+      probeImg.onload = () => {
+        state.bgImage = { dataUrl, width: probeImg.naturalWidth, height: probeImg.naturalHeight };
+        state.bgImageVisible = true;
+        closeBgImagePopover();
+        renderBed();
+      };
+      probeImg.onerror = () => {
+        alert(t("alert_bg_image_failed"));
+      };
+      probeImg.src = dataUrl;
+    };
+    reader.onerror = () => {
+      alert(t("alert_bg_image_failed"));
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if(bgImagePopover.hidden) return;
+    if(e.target.closest("#bgImagePopover")) return;
+    if(e.target.closest("#bgImageBtn")) return; // eigener Toggle-Handler kümmert sich
+    closeBgImagePopover();
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && !bgImagePopover.hidden) closeBgImagePopover();
+  });
+
+  // Strg/Cmd + Mausrad = zoomen, mit Mausposition als Fokuspunkt
+  canvasScrollEl.addEventListener("wheel", (e) => {
+    if(!(e.ctrlKey || e.metaKey)) return; // normales Scrollen unangetastet lassen
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015); // sanfte, größenunabhängige Stufung
+    setZoom(state.displayScale * factor, e.clientX, e.clientY);
+  }, { passive:false });
+
+  /* ---------------------------------------------------------------
+     8c) PNG-EXPORT
+     Klont das Garten-SVG, löst CSS-Variablen zu echten Farbwerten auf
+     (ein eigenständiges SVG-Bild kennt kein var(--...) aus dem Dokument-
+     Kontext mehr) und entfernt Auswahl-Hervorhebungen für einen sauberen
+     Export. Danach wird in fester, hoher Auflösung (unabhängig vom
+     aktuellen Zoom) in ein Canvas gezeichnet und als PNG heruntergeladen.
+  ----------------------------------------------------------------*/
+  // Export-Auflösung abhängig von der Gartengröße: kleine/normale Gärten
+  // bleiben gestochen scharf (4 px/cm), erst wenn die Kantenlänge in die
+  // Nähe der Chrome-Canvas-Obergrenze (~16384px) kommt, wird automatisch
+  // gröber gerastert, damit der Export nicht lautlos leer bleibt.
+  // MAX_CANVAS_EDGE_PX liegt bewusst mit Sicherheitsabstand unter der
+  // tatsächlichen Chrome-Grenze (siehe Testergebnisse: ~4000x3000cm bei
+  // 4 px/cm, also ~16000x12000px, war die zuletzt noch funktionierende Größe).
+  const MAX_CANVAS_EDGE_PX = 15000;
+  const RESOLUTION_STEPS_PX_PER_CM = [4, 2, 1, 0.5, 0.25];
+
+  function pickExportResolution(widthCm, heightCm){
+    const maxEdgeCm = Math.max(widthCm, heightCm);
+    for(const ppc of RESOLUTION_STEPS_PX_PER_CM){
+      if(maxEdgeCm * ppc <= MAX_CANVAS_EDGE_PX) return ppc;
+    }
+    // Selbst die gröbste Stufe reicht nicht aus (extrem großer Garten) -
+    // dann die kleinstmögliche Auflösung nehmen, die zumindest formal unter
+    // der Grenze bleibt (kann in Ausnahmefällen dennoch scheitern).
+    return MAX_CANVAS_EDGE_PX / maxEdgeCm;
+  }
+
+  async function exportBedAsPng(){
+   try{
+    const clone = bedSvg.cloneNode(true);
+    clone.removeAttribute("class"); // z.B. "fill-armed"/"panning" nicht mit exportieren
+    clone.querySelectorAll(".plant-mark").forEach(el => el.classList.remove("selected"));
+
+    // Notizzettel für den SVG-Export bereinigen: Bedienelemente (Lösch-Knopf,
+    // Ziehgriff, Skalier-Griff, Auswahlrahmen) raus. Der Text selbst wird
+    // NICHT als foreignObject mitgeklont - das Rendern von foreignObject/
+    // textarea-Inhalten beim SVG->Image->Canvas-Weg ist browserübergreifend
+    // unzuverlässig (Firefox: schwarze Fläche, Chrome: Bild lädt gar nicht/
+    // Canvas gilt als "tainted"). Stattdessen bleibt hier nur der gelbe
+    // Zettel-Hintergrund im SVG, und der Text wird weiter unten NACH dem
+    // Rastern des SVGs direkt auf den fertigen Canvas gezeichnet (robuster,
+    // funktioniert identisch in allen Browsern).
+    const noteTextJobs = []; // {x, y, w, h, text} in cm, für die Canvas-Textzeichnung
+    clone.querySelectorAll(".note-mark").forEach((el, idx) => {
+      el.classList.remove("selected");
+      el.querySelector(".note-drag-handle")?.remove();
+      el.querySelector(".note-delete-btn")?.remove();
+      el.querySelector(".note-style-btn")?.remove();
+      el.querySelector(".note-resize-handle")?.remove();
+      el.querySelector("foreignObject")?.remove();
+    });
+    state.notes.forEach(note => {
+      if(note.text && note.text.trim()){
+        noteTextJobs.push({
+          x: note.x, y: note.y, w: note.w, h: note.h, text: note.text,
+          color: note.color || NOTE_DEFAULT_COLOR,
+          fontSize: note.fontSize || NOTE_DEFAULT_FONT_SIZE
+        });
+      }
+    });
+
+    // CSS-Variablen in Attributen (stroke/fill) durch echte Farbwerte ersetzen
+    const rootStyle = getComputedStyle(document.documentElement);
+    function resolveVar(value){
+      const m = value.match(/^var\((--[\w-]+)\)$/);
+      return m ? rootStyle.getPropertyValue(m[1]).trim() : value;
+    }
+    clone.querySelectorAll("[stroke],[fill]").forEach(el => {
+      ["stroke", "fill"].forEach(attr => {
+        const v = el.getAttribute(attr);
+        if(v && v.startsWith("var(")) el.setAttribute(attr, resolveVar(v));
+      });
+    });
+
+    // Pflanzenbilder (item.image, z.B. "images/melone.png") als Data-URLs
+    // einbetten: das SVG wird gleich in einen Blob verpackt, und Blob-URLs
+    // haben keinen Ordner, relativ zu dem der Browser sonst suchen würde.
+    // Ein einfaches Auflösen zu einer absoluten URL reicht nicht - der
+    // Browser blockiert das Nachladen von Bild-Dateien innerhalb eines
+    // Blob-SVGs aus Sicherheitsgründen. Per fetch() vorab als Data-URL
+    // einbetten umgeht das, da dann keine Nachlade-Anfrage mehr nötig ist.
+    const imageEls = Array.from(clone.querySelectorAll("image"));
+    await Promise.all(imageEls.map(async imgEl => {
+      const href = imgEl.getAttribute("href");
+      if(!href || href.startsWith("data:")) return;
+      try {
+        const abs = new URL(href, document.baseURI).href;
+        const resp = await fetch(abs);
+        const blob = await resp.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        imgEl.setAttribute("href", dataUrl);
+        imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
+      } catch(err){
+        // Bild konnte nicht geladen werden (z.B. Datei fehlt) - Referenz
+        // entfernen, damit wenigstens kein kaputtes/leeres Bild im Export landet.
+        imgEl.removeAttribute("href");
+        imgEl.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+      }
+    }));
+
+    // Weißer Hintergrund hinter allem, sonst wäre PNG transparent
+    const bg = document.createElementNS(SVG_NS, "rect");
+    bg.setAttribute("x", 0); bg.setAttribute("y", 0);
+    bg.setAttribute("width", state.bedWidth);
+    bg.setAttribute("height", state.bedHeight);
+    bg.setAttribute("fill", resolveVar("var(--color-canvas)"));
+    clone.insertBefore(bg, clone.firstChild);
+
+    const exportPxPerCm = pickExportResolution(state.bedWidth, state.bedHeight);
+    const outW = Math.round(state.bedWidth * exportPxPerCm);
+    const outH = Math.round(state.bedHeight * exportPxPerCm);
+    clone.setAttribute("width", outW);
+    clone.setAttribute("height", outH);
+
+    const svgText = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    img.onload = () => {
+     try{
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, outW, outH);
+      URL.revokeObjectURL(svgUrl);
+
+      // Notiztexte manuell auf den fertigen Canvas zeichnen (siehe Kommentar
+      // weiter oben, warum nicht als Teil des SVGs). Skaliert mit derselben
+      // exportPxPerCm-Auflösung wie der Rest des Bilds.
+      noteTextJobs.forEach(job => {
+        const px = v => v * exportPxPerCm;
+        // paddingTop bewusst NICHT über px() (cm->Export-Pixel) berechnet: das
+        // sollte ein fester Bildschirm-Pixel-Wert sein (analog zum CSS
+        // "padding: 5px" der Textarea), skalierte aber bisher fälschlich mit
+        // der Export-Auflösung mit (bei 4px/cm wurden aus "5" ganze 20 Export-
+        // Pixel - deutlich mehr Abstand als auf dem Bildschirm gewollt).
+        const paddingTop = 5;
+        const paddingSide = px(6);
+        const topStripe = px(18);
+        const textX = px(job.x - job.w/2) + paddingSide;
+        const textYTop = px(job.y - job.h/2) + topStripe + paddingTop;
+        const boxW = px(job.w) - paddingSide * 2;
+        // Bei sehr kleinen Notizen (Mindestgröße) könnte boxH sonst auf 0 oder
+        // knapp negativ fallen - Mindesthöhe für wenigstens eine Zeile sichern.
+        const boxH = Math.max(px(job.h) - topStripe - paddingTop - px(6), px(job.fontSize) * 1.3 * 1.3);
+        const fontFamily = getComputedStyle(document.body).fontFamily;
+
+        // Zeilenumbruch für eine gegebene Schriftgröße berechnen (wie im
+        // Browser: Wörter füllen eine Zeile, bis sie nicht mehr passen).
+        function wrapAt(fontSizePx){
+          ctx.font = `${fontSizePx}px ${fontFamily}`;
+          const words = job.text.split(/\s+/);
+          const lines = [];
+          let currentLine = "";
+          words.forEach(word => {
+            const testLine = currentLine ? currentLine + " " + word : word;
+            if(ctx.measureText(testLine).width > boxW && currentLine){
+              lines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          });
+          if(currentLine) lines.push(currentLine);
+          return lines;
+        }
+
+        // Angefragte Schriftgröße probieren; passt der komplette Text nicht in
+        // die verfügbare Höhe, Schrift schrittweise verkleinern (wie bei
+        // "Text automatisch verkleinern"), bis alles sichtbar ist oder eine
+        // sinnvolle Mindestgröße erreicht ist - so geht nie Text verloren,
+        // nur weil der Zettel knapp bemessen wurde.
+        let fontSizePx = px(job.fontSize) * 1.3; // grob an die Bildschirm-Schriftgröße angepasst
+        const minFontSizePx = px(6); // nicht kleiner als ~6cm-Schrift im Export
+        let lines = wrapAt(fontSizePx);
+        let lineHeight = fontSizePx * 1.25;
+        while(lines.length * lineHeight > boxH && fontSizePx > minFontSizePx){
+          fontSizePx *= 0.92;
+          lineHeight = fontSizePx * 1.25;
+          lines = wrapAt(fontSizePx);
+        }
+
+        ctx.save();
+        ctx.font = `${fontSizePx}px ${fontFamily}`;
+        ctx.fillStyle = job.color;
+        ctx.textBaseline = "top";
+        // Auch nach dem Verkleinern könnte in Extremfällen (winziger Zettel,
+        // riesiger Text) noch nicht alles passen - als letzte Absicherung
+        // wird dann trotzdem nichts abgeschnitten, sondern über den Zettel-
+        // rand hinaus weitergeschrieben, statt Inhalt kommentarlos zu verlieren.
+        lines.forEach((line, i) => {
+          ctx.fillText(line, textX, textYTop + i * lineHeight, boxW);
+        });
+        ctx.restore();
+      });
+
+      canvas.toBlob(pngBlob => {
+        if(!pngBlob){
+          alert(t("alert_png_export_failed") + "\n\nDas Bild konnte nicht erzeugt werden (canvas.toBlob lieferte nichts).");
+          return;
+        }
+        const link = document.createElement("a");
+        link.download = `gartenplan_${state.bedWidth}x${state.bedHeight}cm.png`;
+        link.href = URL.createObjectURL(pngBlob);
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+
+        if(exportPxPerCm < 4){
+          alert(t("alert_export_resolution_note", {w: state.bedWidth, h: state.bedHeight, px: exportPxPerCm}));
+        }
+      }, "image/png");
+     } catch(err){
+       // z.B. SecurityError, wenn das SVG durch nicht eingebettete externe
+       // Ressourcen als "tainted" gilt - passiert asynchron in img.onload,
+       // der äußere try/catch der Funktion fängt das NICHT ab.
+       URL.revokeObjectURL(svgUrl);
+       console.error("PNG-Export fehlgeschlagen (beim Zeichnen):", err);
+       alert(t("alert_png_export_failed") + "\n\n" + err.message);
+     }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(svgUrl);
+      alert(t("alert_png_export_failed"));
+    };
+    img.src = svgUrl;
+   } catch(err){
+     // Fehler sichtbar machen statt stillschweigend abzubrechen (war zuvor
+     // der Grund für "keine Reaktion" in Chrome bei bestimmten SVG-Inhalten).
+     console.error("PNG-Export fehlgeschlagen:", err);
+     alert(t("alert_png_export_failed") + "\n\n" + err.message);
+   }
+  }
+
+  exportPngBtn.addEventListener("click", exportBedAsPng);
+
+  // Öffnet die Pflanzendatenbank-Pflege in einem neuen Tab/Fenster.
+  // Relativer Pfad, da beide Dateien im selben Verzeichnis liegen.
+  // Fester Fenstername (statt "_blank") sorgt dafür, dass der Browser bei
+  // erneutem Klick zum bereits offenen Tab wechselt, statt einen neuen zu
+  // öffnen - solange der Tab nicht zwischenzeitlich geschlossen wurde.
+  openDbEditorBtn.addEventListener("click", () => {
+    // Aktuelle Sprache als URL-Parameter mitgeben, damit der Datenbank-Editor
+    // direkt in derselben Sprache startet (statt sich auf seinen eigenen,
+    // möglicherweise abweichenden localStorage-Wert zu verlassen).
+    window.open(`datenbank_bearbeiten.html?lang=${currentLang}`, "gartenplaner-db-editor");
+  });
+
+  // Seitenleiste ein-/ausblenden, um bei schmaleren Fenstern (Tablet,
+  // kleineres Browserfenster) mehr Platz für den Garten zu gewinnen.
+  sidebarToggleBtn.addEventListener("click", () => {
+    const collapsed = asideEl.classList.toggle("collapsed");
+    sidebarToggleBtn.title = collapsed ? t("tooltip_sidebar_show") : t("tooltip_sidebar_hide");
+  });
+
+  // Kopfzeile einklappen, um bei kleineren Fenstern (oder einfach als
+  // aufgeräumtere Ansicht) Platz zu sparen: Gartengröße- und Zoom-Regler
+  // verschwinden, der Titel wird kurz.
+  headerToggleBtn.addEventListener("click", () => {
+    const collapsed = headerEl.classList.toggle("collapsed");
+    headerToggleIcon.textContent = collapsed ? "⌄" : "⌃";
+    headerToggleBtn.title = collapsed ? t("tooltip_header_expand") : t("tooltip_header_collapse");
+  });
+
+  /* ---------------------------------------------------------------
+     9) GARTENGRÖSSE
+  ----------------------------------------------------------------*/
+  bedWidthInput.addEventListener("change", () => {
+    pushHistory();
+    state.bedWidth = Math.max(30, parseInt(bedWidthInput.value, 10) || 1000);
+    renderBed();
+  });
+  bedHeightInput.addEventListener("change", () => {
+    pushHistory();
+    state.bedHeight = Math.max(30, parseInt(bedHeightInput.value, 10) || 1000);
+    renderBed();
+  });
+
+  /* ---------------------------------------------------------------
+     10) SPEICHERN / LADEN als Datei
+  ----------------------------------------------------------------*/
+  let currentFileName = "gartenplan.json";
+
+  addNoteBtn.addEventListener("click", () => addNote());
+
+  saveBtn.addEventListener("click", () => {
+    const data = {
+      bedWidth: state.bedWidth,
+      bedHeight: state.bedHeight,
+      showGrid: state.showGrid,
+      canvasBg: state.canvasBg,
+      bgImage: state.bgImage,
+      bgImageVisible: state.bgImageVisible,
+      instances: state.instances.map(({uid, itemId, x, y, locked}) => locked ? ({uid, itemId, x, y, locked}) : ({uid, itemId, x, y})),
+      notes: state.notes.map(({uid, x, y, w, h, text, bg, color, fontSize}) => ({uid, x, y, w, h, text, bg, color, fontSize}))
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = currentFileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  loadBtn.addEventListener("click", () => loadFileInput.click());
+  loadFileInput.addEventListener("change", () => {
+    const file = loadFileInput.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(typeof data.bedWidth !== "number" || typeof data.bedHeight !== "number" || !Array.isArray(data.instances)){
+          throw new Error("Unerwartetes Dateiformat.");
+        }
+        pushHistory();
+        state.bedWidth = data.bedWidth;
+        state.bedHeight = data.bedHeight;
+        state.showGrid = typeof data.showGrid === "boolean" ? data.showGrid : true;
+        state.canvasBg = typeof data.canvasBg === "string" ? data.canvasBg : "#d9cfa8";
+        // bgImage ist optional - ältere Speicherstände kennen das Feld noch nicht
+        state.bgImage = (data.bgImage && typeof data.bgImage.dataUrl === "string"
+          && typeof data.bgImage.width === "number" && typeof data.bgImage.height === "number")
+          ? data.bgImage : null;
+        // bgImageVisible ist optional - ältere Speicherstände kennen das Feld noch nicht
+        state.bgImageVisible = typeof data.bgImageVisible === "boolean" ? data.bgImageVisible : true;
+        state.instances = data.instances.filter(i => ITEM_BY_ID[i.itemId]);
+        uidCounter = Math.max(1, ...state.instances.map(i => i.uid + 1), 1);
+        // notes ist optional - ältere Speicherstände kennen das Feld noch nicht
+        state.notes = Array.isArray(data.notes)
+          ? data.notes.filter(n => typeof n.x === "number" && typeof n.y === "number")
+              .map(n => ({
+                uid: n.uid,
+                x: n.x, y: n.y,
+                w: typeof n.w === "number" ? n.w : NOTE_DEFAULT_W,
+                h: typeof n.h === "number" ? n.h : NOTE_DEFAULT_H,
+                text: typeof n.text === "string" ? n.text : "",
+                bg: typeof n.bg === "string" ? n.bg : NOTE_DEFAULT_BG,
+                color: typeof n.color === "string" ? n.color : NOTE_DEFAULT_COLOR,
+                fontSize: typeof n.fontSize === "number" ? n.fontSize : NOTE_DEFAULT_FONT_SIZE
+              }))
+          : [];
+        noteUidCounter = Math.max(1, ...state.notes.map(n => n.uid + 1), 1);
+        selectedUids.clear();
+        selectedNoteUids.clear();
+        currentFileName = file.name;
+        bedWidthInput.value = state.bedWidth;
+        bedHeightInput.value = state.bedHeight;
+        syncGridToggleUi();
+        syncCanvasBgUi();
+        renderBed();
+      } catch(err){
+        alert(t("alert_load_failed", {msg: err.message}));
+      }
+    };
+    reader.readAsText(file);
+    loadFileInput.value = "";
+  });
+
+  undoBtn.addEventListener("click", undo);
+  redoBtn.addEventListener("click", redo);
+
+  /* ---------------------------------------------------------------
+     10) WARNHINWEIS BEI SEITE VERLASSEN / NEU LADEN
+     Nur nötig, wenn tatsächlich etwas im Garten steht - bei leerem
+     Garten gibt es nichts zu verlieren.
+  ----------------------------------------------------------------*/
+  window.addEventListener("beforeunload", (e) => {
+    if(state.instances.length){
+      e.preventDefault();
+      e.returnValue = ""; // nötig für Chrome; der eigentliche Text wird vom Browser vorgegeben
+    }
+  });
+
+  /* ---------------------------------------------------------------
+     INIT
+  ----------------------------------------------------------------*/
+  applyLanguage(currentLang);
+  renderBed();
+  syncZoomUi();
+  syncHistoryUi();
+
+})();
+</script>
+</body>
+</html>

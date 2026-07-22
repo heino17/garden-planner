@@ -1,0 +1,10 @@
+{
+  "bedWidth": 5000,
+  "bedHeight": 5000,
+  "showGrid": true,
+  "canvasBg": "#d9cfa8",
+  "bgImage": null,
+  "bgImageVisible": true,
+  "instances": [],
+  "notes": []
+}
