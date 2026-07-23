@@ -1,4 +1,8 @@
 /*
+   Julias's Gartenplaner- Pflanzen-Datenbank-Editor
+   Copyright (C) 2026 heino17
+   https://github.com/heino17/garden-planner
+
    Dieses File ist bewusst als eigenständige, reine JS-Datei gehalten
    (kein separates .json/.yml + fetch), weil fetch() bei lokal per
    Doppelklick geöffneten HTML-Dateien (file://) in vielen Browsern aus
