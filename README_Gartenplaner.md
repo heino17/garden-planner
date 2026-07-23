@@ -20,14 +20,17 @@ Für die Bild-Funktion (eigene Fotos statt Icon je Pflanze, siehe unten) sowie d
 **Garten & Raster**
 - Garten als SVG, 1 Einheit = 1 cm, Standardgröße 1000×1000 cm, Breite/Länge oben einstellbar
 - Hintergrundfarbe des Rasters frei wählbar (Farbwähler im Header), wirkt sich automatisch auch auf den PNG-Export aus
+- Rasterlinien passen ihre Farbe automatisch und stufenlos an die gewählte Hintergrundfarbe an (dunkler Hintergrund → helle Linien, heller Hintergrund → dunkle Linien) – kein abrupter Umschlagpunkt, sondern ein weicher Verlauf über alle Zwischenfarben
 - Rasterlinien ein-/ausblendbar (bewusst nicht Teil der Undo/Redo-Historie, reine Anzeige-Einstellung)
 - Zoom per Schieberegler (10–500 %) oder Strg/Cmd + Mausrad, mit der Mausposition als Fokuspunkt; startet standardmäßig bei 100 %
 - Pan: Klick + Ziehen auf leerem Rasterbereich verschiebt den sichtbaren Ausschnitt; ein reiner Klick ohne Bewegung hebt stattdessen die Auswahl auf
 
 **Seitenleiste & Pflanzendaten**
 - Seitenleiste mit Suche, zwei Gruppen: „🌿 Pflanzen" und „🧱 Wege & Mauern"
+- Die Gruppenüberschriften bleiben beim Scrollen der Liste oben sichtbar („sticky"), lassen sich aber weiterhin per Klick ein-/ausklappen – erspart das Zurückscrollen, um eine lange Liste zu schließen
 - Klick auf eine Karte öffnet ein Detail-Panel mit allen vorhandenen Rohdaten (Standort, Wuchshöhe, Keimung, Lebensdauer usw.)
-- Klick auf ein Objekt im Garten hebt automatisch die passende Karte in der Seitenleiste hervor (inkl. Scroll zur Karte)
+- Klick auf ein Objekt im Garten hebt automatisch die passende Karte in der Seitenleiste hervor und scrollt sie in die Mitte des sichtbaren Bereichs (unterhalb der sticky Überschriften, damit sie nie verdeckt ist)
+- Umgekehrt markiert ein Klick auf eine Karte in der Seitenleiste alle bereits im Garten platzierten Objekte dieses Typs – sofern gerade nichts anderes im Garten ausgewählt ist
 - Eigene Bilder statt Icon pro Pflanze/Material möglich (optionales `image`-Feld); ist kein Bild hinterlegt, wird das Icon gezeigt, sonst bleibt die Karte leer
 - Sidebar lässt sich per Fähnchen-Button ein-/ausblenden (mehr Platz für den Garten auf schmaleren Fenstern)
 - Verknüpfung mit der Datenbank-Pflege: Button „Pflanzendatenbank bearbeiten" öffnet `datenbank_bearbeiten.html` (liegt im selben Ordner) in einem neuen Tab
@@ -35,9 +38,11 @@ Für die Bild-Funktion (eigene Fotos statt Icon je Pflanze, siehe unten) sowie d
 **Platzieren & Bearbeiten**
 - Einzelplatzierung: Karte in den Garten ziehen → Kreis (Pflanzen) bzw. Rechteck (Material) in realer Größe wird platziert
 - Verschieben platzierter Objekte per Ziehen, Auswählen per Klick, Entfernen per Taste Entf/Backspace oder Button
+- Ausgewählte Objekte (und Notizen) lassen sich zusätzlich mit den **Pfeiltasten** verschieben: 1 cm pro Tastendruck, mit gehaltener Umschalttaste 10 cm; gesperrte Objekte werden dabei übersprungen
 - Mehrfachauswahl per Shift-Klick oder per Rechteck-Marquee (Strg/Shift + Ziehen auf leerem Hintergrund), inkl. gemeinsamem Verschieben und Löschen
 - Flächenfüllung (▦-Button an jeder Karte): Rechteck im Garten aufziehen, Pflanzen nutzen dabei echten Pflanz- und Reihenabstand, Material wird lückenlos gekachelt; bleibt für mehrere Flächen aktiv, bis Esc oder erneuter Klick
-- Live-Maßanzeige beim Flächenfüllen: zeigt Breite × Höhe in cm sowie tatsächliche Spalten × Reihen direkt am Auswahlrechteck
+- Live-Maßanzeige beim Flächenfüllen: zeigt Breite × Höhe in cm sowie tatsächliche Spalten × Reihen direkt am Auswahlrechteck; bleibt auch am rechten und oberen Rand des Gartens vollständig sichtbar, statt abgeschnitten zu werden
+- Icons und eigene Bilder wachsen dynamisch mit der Größe des Kreises bzw. Rechtecks mit (Bilder nutzen 90 %, Icons 62 % der kleineren Kantenlänge) – auch beim PNG-Export exakt zentriert dargestellt
 
 **Objekte sperren / als Fläche fixieren**
 - Pflanzen- oder Material-Instanzen im Raster lassen sich sperren, sodass sie nicht mehr aus Versehen verschoben werden können – gedacht für großflächig angelegte Flächen wie Rasen.
@@ -57,12 +62,22 @@ Für die Bild-Funktion (eigene Fotos statt Icon je Pflanze, siehe unten) sowie d
 | 🔽 | Eine Ebene nach hinten |
 | ⬇️ | Ganz nach hinten |
 
+**Material drehen & Größe ändern**
+- Bei einzeln ausgewählten Material-Objekten (z. B. Mauerziegel, Trittsteine) erscheinen zwei Ziehgriffe direkt am Objekt:
+  - **Dreh-Griff** (kleiner Kreis oberhalb der Form, mit Verbindungslinie): frei drehbar, rastet bei 0°/90°/180°/270° ein – praktisch, um z. B. einen Ziegel exakt quer zu verlegen, ohne ihn zweimal anlegen zu müssen
+  - **Größen-Griff** (unten rechts bzw. am Kreisrand): ändert Breite/Höhe (Rechtecke) bzw. Durchmesser (Kreise), wächst/schrumpft vom Mittelpunkt aus
+- Icons und Bilder drehen und skalieren automatisch mit
+- Über das Rechtsklick-Kontextmenü lässt sich Drehung/Größe eines veränderten Objekts jederzeit auf den Ursprungszustand zurücksetzen
+- Rotation und Größe werden mit in die `.json` gespeichert; ältere Spielstände ohne diese Felder laden weiterhin problemlos
+- Gilt ausschließlich für Material – die Größe von Pflanzen bleibt an den hinterlegten Pflanz-/Reihenabstand gekoppelt
+
 **Hintergrundbild fürs Raster**
 - Über den Button 🖼️ im Header (neben dem Raster-Ein/Aus-Button) lässt sich ein eigenes Hintergrundbild hinter das komplette Raster legen – zum Beispiel ein Foto des echten Gartenbodens oder eine Textur.
 - Das Bild wird in seiner **echten Pixelgröße** (1 px = 1 cm) platziert und **wiederholt sich automatisch** horizontal wie vertikal, falls es kleiner ist als das Raster.
 - Ist kein Bild gesetzt, gilt wie bisher nur die einfarbige Rasterfarbe.
 - Das Bild wird **eingebettet gespeichert**, dadurch funktioniert auch der **PNG-Export direkt aus dem Browser** – ganz ohne lokalen Server (z. B. LiveServer).
 - Das Hintergrundbild ist **nicht Teil von Undo/Redo** (genau wie Rasterfarbe und Raster-Sichtbarkeit).
+- Im Dropdown-Menü des 🖼️-Buttons lässt sich ein geladenes Bild jederzeit temporär **ein-/ausblenden**, ohne es zu entfernen – praktisch, um kurz nur das Raster zu sehen. Der Sichtbarkeits-Status wird mitgespeichert.
 
 **Notizzettel**
 - Frei platzierbare, gelbe Klebezettel auf dem Raster, mit editierbarem Text – unabhängig vom Pflanzen-System
@@ -78,7 +93,7 @@ Für die Bild-Funktion (eigene Fotos statt Icon je Pflanze, siehe unten) sowie d
 
 **Rückgängig / Wiederherstellen**
 - Undo/Redo-Buttons im Header, zusätzlich Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z)
-- Erfasst: Platzieren, Verschieben (einzeln & Gruppe), Löschen, Flächenfüllung, Notizzettel, Gartengröße ändern, Datei laden
+- Erfasst: Platzieren, Verschieben (einzeln & Gruppe), Löschen, Flächenfüllung, Notizzettel, Material drehen/skalieren, Gartengröße ändern, Datei laden
 - Zoom und Rasterlinien-Anzeige sind bewusst **nicht** Teil der Historie
 
 **Speichern & Exportieren**
@@ -133,14 +148,17 @@ For the image feature (custom photos instead of an icon per plant, see below) an
 ### **Garden & Grid**
 - Garden rendered as SVG, 1 unit = 1 cm, default size 1000×1000 cm, width/length adjustable at the top
 - Freely selectable grid background color (color picker in the header), automatically applies to the PNG export as well
+- Grid lines automatically and smoothly adapt their color to the chosen background color (dark background → light lines, light background → dark lines) - no abrupt switching point, but a smooth transition across all intermediate colors
 - Grid lines toggleable (deliberately not part of the undo/redo history, a pure display setting)
 - Zoom via slider (10–500%) or Ctrl/Cmd + mouse wheel, with the mouse position as the focus point; starts at 100% by default
 - Pan: click + drag on empty grid area moves the visible viewport; a plain click without movement clears the selection instead
 
 ### **Sidebar & Plant Data**
 - Sidebar with search, two groups: "🌿 Plants" and "🧱 Paths & Walls"
+- The group headings stay visible at the top while scrolling the list ("sticky"), but can still be collapsed/expanded by clicking - saves scrolling back up just to close a long list
 - Clicking a card opens a detail panel with all available raw data (location, growth height, germination, lifespan, etc.)
-- Clicking an object in the garden automatically highlights the matching card in the sidebar (including scrolling to it)
+- Clicking an object in the garden automatically highlights the matching card in the sidebar and scrolls it to the center of the visible area (below the sticky headings, so it's never hidden)
+- Conversely, clicking a card in the sidebar selects all instances of that type already placed in the garden - as long as nothing else is currently selected in the garden
 - Custom images instead of an icon per plant/material are supported (optional `image` field); if no image is set, the icon is shown, otherwise the card stays empty
 - Sidebar can be collapsed/expanded via a flag-style button (more room for the garden on narrower windows)
 - Linked to database maintenance: "Edit plant database" button opens `datenbank_bearbeiten.html` (located in the same folder) in a new tab
@@ -148,9 +166,11 @@ For the image feature (custom photos instead of an icon per plant, see below) an
 ### **Placing & Editing**
 - Single placement: drag a card into the garden → a circle (plants) or rectangle (material) in real size is placed
 - Move placed objects by dragging, select by clicking, remove via Delete/Backspace key or button
+- Selected objects (and notes) can also be moved with the **arrow keys**: 1 cm per key press, 10 cm while holding Shift; locked objects are skipped
 - Multi-select via Shift-click or rectangular marquee selection (Ctrl/Shift + drag on empty background), including moving and deleting the whole selection together
 - Area fill (▦ button on each card): draw a rectangle in the garden; plants use real plant and row spacing, materials are tiled seamlessly; stays active for multiple areas until Esc or another click
-- Live measurement display while filling an area: shows width × height in cm as well as the actual columns × rows directly on the selection rectangle
+- Live measurement display while filling an area: shows width × height in cm as well as the actual columns × rows directly on the selection rectangle; stays fully visible at the garden's right and top edges instead of being clipped
+- Icons and custom images dynamically grow with the size of the circle or rectangle (images use 90%, icons 62% of the shorter side) - rendered exactly centered in the PNG export as well
 
 **Lock Objects / Fix as an Area**
 - Plant or material instances in the grid can be locked so they can no longer be moved accidentally—intended for large areas such as lawns.
@@ -169,6 +189,15 @@ For the image feature (custom photos instead of an icon per plant, see below) an
 | 🔼 | Move One Layer Forward |
 | 🔽 | Move One Layer Backward |
 | ⬇️ | Send to Back |
+
+**Rotate & Resize Material**
+- When a single material object (e.g. a brick, stepping stone) is selected, two drag handles appear directly on the object:
+  - **Rotate handle** (small circle above the shape, with a connecting line): freely rotatable, snaps to 0°/90°/180°/270° - handy for laying a brick exactly crosswise without having to build it twice
+  - **Resize handle** (bottom right, or on the circle's edge): changes width/height (rectangles) or diameter (circles), grows/shrinks from the center
+- Icons and images rotate and scale along with the object automatically
+- The right-click context menu lets you reset a changed object's rotation/size back to its original state at any time
+- Rotation and size are saved in the `.json` file; older saves without these fields continue to load without issues
+- Applies to material only - plant size stays tied to its stored plant/row spacing
     
 **Background Image for the Grid**
 - Use the 🖼️ button in the header (next to the Grid On/Off button) to place your own background image behind the entire grid—for example, a photo of the actual garden soil or a texture.
@@ -176,6 +205,7 @@ For the image feature (custom photos instead of an icon per plant, see below) an
 - If no image is set, only the solid-color grid color applies, as before.
 - The image is **saved as an embedded file**, which also enables **PNG export directly from the browser**—without the need for a local server (e.g., LiveServer).
 - The background image is **not included in Undo/Redo** (just like the grid color and grid visibility).
+- The 🖼️ button's dropdown menu lets you temporarily **show/hide** a loaded image at any time without removing it - handy for briefly seeing just the grid. The visibility state is saved along with the file.
 
 ### **Sticky Notes**
 - Freely placeable, yellow sticky notes on the grid, with editable text – independent of the plant system
@@ -191,7 +221,7 @@ For the image feature (custom photos instead of an icon per plant, see below) an
 
 ### **Undo / Redo**
 - Undo/redo buttons in the header, plus Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z)
-- Captures: placing, moving (single & group), deleting, area fill, sticky notes, changing garden size, loading a file
+- Captures: placing, moving (single & group), deleting, area fill, sticky notes, rotating/resizing material, changing garden size, loading a file
 - Zoom and grid line display are deliberately **not** part of the history
 
 ### **Saving & Export**

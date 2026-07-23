@@ -1,8 +1,4 @@
 /* ==================================================================
-   Julias's Gartenplaner- Pflanzen-Datenbank-Editor
-   Copyright (C) 2026 heino17
-   https://github.com/heino17/garden-planner
-
    pflanzen.js
    Datenquelle für den Gartenplaner. Bewusst als .js (nicht .json)
    ausgelagert, damit die Datei auch unter file:// per <script src>
@@ -17,11 +13,15 @@
 // -------------------- PFLANZEN --------------------
 // shape:"circle" -> Kreis-Durchmesser wird aus plantSpacing/rowSpacing
 // automatisch berechnet (Mittelwert, falls Bereich angegeben).
+
+// -------------------- PFLANZEN --------------------
+// shape:"circle" -> Kreis-Durchmesser wird aus plantSpacing/rowSpacing
+// automatisch berechnet (Mittelwert, falls Bereich angegeben).
 const PLANTS_DATA = [
   {
     id:"alant", kind:"plant", shape:"circle", name:"Alant",
-    icon:"🌼", accent:"#c9a13b", plantSpacing:"60", latin:"Inula helenium, Korbblütler",
-    use:"Heilkraut"
+    icon:"🌼", image:"images/alant.png", accent:"#c9a13b", plantSpacing:"60-90",
+    rowSpacing:"100", latin:"Inula helenium, Korbblütler", use:"Heilkraut", hoehe:"200cm"
   },
   {
     id:"amaranth", kind:"plant", shape:"circle", name:"Amaranth, hängender Fuchsschwanz, Inkaweizen",
@@ -58,8 +58,8 @@ const PLANTS_DATA = [
   },
   {
     id:"barlauch", kind:"plant", shape:"circle", name:"Bärlauch",
-    icon:"🌿", accent:"#3f6b3b", plantSpacing:"15-20", latin:"Allium ursinum, Zwiebelgewächs",
-    use:"Wildkraut", notiz:"Bis 25 Pflanzen pro m²"
+    icon:"🌿", image:"images/baerlauch.png", accent:"#3f6b3b", plantSpacing:"15-20",
+    latin:"Allium ursinum, Zwiebelgewächs", use:"Wildkraut", notiz:"Bis 25 Pflanzen pro m²"
   },
   {
     id:"basilikum", kind:"plant", shape:"circle", name:"Basilikum",
@@ -394,8 +394,8 @@ const PLANTS_DATA = [
   },
   {
     id:"kurbis", kind:"plant", shape:"circle", name:"Kürbis",
-    icon:"🎃", accent:"#d4772c", plantSpacing:"90-120", rowSpacing:"120",
-    keimfaehigkeit:"4 – 6"
+    icon:"🎃", image:"images/kuerbis.png", accent:"#d4772c", plantSpacing:"90-120",
+    rowSpacing:"120", latin:"Cucurbita maxima", keimfaehigkeit:"4 – 6"
   },
   {
     id:"lavendel", kind:"plant", shape:"circle", name:"Lavendel",
@@ -477,8 +477,9 @@ const PLANTS_DATA = [
   },
   {
     id:"melone", kind:"plant", shape:"circle", name:"Melone",
-    icon:"🍈", accent:"#6b8c3f", plantSpacing:"180", rowSpacing:"200",
-    standort:"wärmeliebend, sehr frostempfindlich", keimfaehigkeit:"4 – 6", lebensdauer:"einjährig, Insekten~"
+    icon:"🍈", image:"images/melone2.png", accent:"#6b8c3f", plantSpacing:"180",
+    rowSpacing:"200", latin:"Citrullus lanatus", standort:"wärmeliebend, sehr frostempfindlich", keimfaehigkeit:"4 – 6",
+    lebensdauer:"einjährig, Insekten~"
   },
   {
     id:"minze", kind:"plant", shape:"circle", name:"Minze",

@@ -717,8 +717,9 @@
   const headerEl = document.getElementById("mainHeader");
   const headingEl = document.getElementById("mainHeading");
   const toggleBtn = document.getElementById("headerToggleBtn");
+  const HEADER_STORAGE_KEY = "datenbank_bearbeiten_header_collapsed";
 
-  function setCollapsed(collapsed){
+  function setCollapsed(collapsed, save){
     headerEl.classList.toggle("collapsed", collapsed);
     // t() erst zur Laufzeit aufrufen (nicht beim Setup cachen!), damit
     // hier immer die gerade aktive Sprache verwendet wird - sonst reißt
@@ -726,11 +727,24 @@
     // Sprache im Dropdown gewählt ist.
     headingEl.textContent = collapsed ? t("title_short") : t("title_full");
     toggleBtn.textContent = collapsed ? "▼" : "▲";
+    if (save){
+      localStorage.setItem(HEADER_STORAGE_KEY, collapsed ? "1" : "0");
+    }
   }
 
   toggleBtn.addEventListener("click", ()=>{
-    setCollapsed(!headerEl.classList.contains("collapsed"));
+    setCollapsed(!headerEl.classList.contains("collapsed"), true);
   });
+
+  // Gemerkten Klappzustand beim Start wiederherstellen.
+  // WICHTIG: t() ist an dieser Stelle noch nicht definiert (wird erst
+  // weiter unten im I18N-Abschnitt geladen) - darum hier NICHT
+  // setCollapsed() aufrufen, sondern nur die CSS-Klasse setzen. Die
+  // Überschrift wird gleich danach ohnehin von applyStaticTexts()
+  // korrekt (in der richtigen Sprache) gesetzt.
+  const savedCollapsed = localStorage.getItem(HEADER_STORAGE_KEY) === "1";
+  headerEl.classList.toggle("collapsed", savedCollapsed);
+  toggleBtn.textContent = savedCollapsed ? "▼" : "▲";
 })();
 
 /* ==================================================================

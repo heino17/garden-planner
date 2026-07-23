@@ -1,8 +1,4 @@
 /*
-   Julias's Gartenplaner- Pflanzen-Datenbank-Editor
-   Copyright (C) 2026 heino17
-   https://github.com/heino17/garden-planner
-
    Dieses File ist bewusst als eigenständige, reine JS-Datei gehalten
    (kein separates .json/.yml + fetch), weil fetch() bei lokal per
    Doppelklick geöffneten HTML-Dateien (file://) in vielen Browsern aus
@@ -121,6 +117,7 @@ const I18N = {
     ctx_send_back: "Ganz nach hinten",
     ctx_lock: "Sperren",
     ctx_unlock: "Entsperren",
+    ctx_reset_transform: "Ausrichtung/Größe zurücksetzen",
 
     tooltip_bg_image: "Hintergrundbild",
     bg_image_choose: "Bild wählen …",
@@ -219,6 +216,7 @@ const I18N = {
     ctx_send_back: "Send to back",
     ctx_lock: "Lock",
     ctx_unlock: "Unlock",
+    ctx_reset_transform: "Reset rotation/size",
 
     tooltip_bg_image: "Background image",
     bg_image_choose: "Choose image …",
@@ -317,6 +315,7 @@ const I18N = {
     ctx_send_back: "На задний план",
     ctx_lock: "Заблокировать",
     ctx_unlock: "Разблокировать",
+    ctx_reset_transform: "Сбросить поворот/размер",
 
     tooltip_bg_image: "Фоновое изображение",
     bg_image_choose: "Выбрать изображение …",
@@ -415,6 +414,7 @@ const I18N = {
     ctx_send_back: "Enviar al fondo",
     ctx_lock: "Bloquear",
     ctx_unlock: "Desbloquear",
+    ctx_reset_transform: "Restablecer giro/tamaño",
 
     tooltip_bg_image: "Imagen de fondo",
     bg_image_choose: "Elegir imagen …",
@@ -513,6 +513,7 @@ const I18N = {
     ctx_send_back: "Envoyer à l'arrière-plan",
     ctx_lock: "Verrouiller",
     ctx_unlock: "Déverrouiller",
+    ctx_reset_transform: "Réinitialiser rotation/taille",
 
     tooltip_bg_image: "Image de fond",
     bg_image_choose: "Choisir une image …",
@@ -611,6 +612,7 @@ const I18N = {
     ctx_send_back: "最背面へ",
     ctx_lock: "ロック",
     ctx_unlock: "ロック解除",
+    ctx_reset_transform: "回転/サイズをリセット",
 
     tooltip_bg_image: "背景画像",
     bg_image_choose: "画像を選択…",
@@ -708,6 +710,7 @@ const I18N = {
     ctx_send_back: "맨 뒤로 보내기",
     ctx_lock: "잠그기",
     ctx_unlock: "잠금 해제",
+    ctx_reset_transform: "회전/크기 재설정",
 
     tooltip_bg_image: "배경 이미지",
     bg_image_choose: "이미지 선택…",
@@ -805,6 +808,7 @@ const I18N = {
     ctx_send_back: "置于底层",
     ctx_lock: "锁定",
     ctx_unlock: "解锁",
+    ctx_reset_transform: "重置旋转/大小",
 
     tooltip_bg_image: "背景图片",
     bg_image_choose: "选择图片…",

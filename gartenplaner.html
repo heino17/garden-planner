@@ -2,7 +2,6 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="copyright" content="2026 - heino17" />
 <title>Julia's Gartenplaner</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
@@ -538,6 +537,27 @@
   .plant-mark.selected circle,
   .plant-mark.selected rect{ stroke: #fff; stroke-width:3; stroke-dasharray:4 3; }
 
+  /* Dreh-/Skalier-Griffe für einzeln ausgewähltes Material (siehe
+     attachTransformHandles). Eigene, spezifischere Regeln nötig, weil die
+     generischen ".plant-mark circle"/".plant-mark.selected circle"-Regeln
+     oben sonst auch diese Griff-Kreise mit dem dicken Auswahlrahmen
+     einfärben würden. */
+  .plant-mark .transform-handle-line{
+    stroke: #fff;
+    stroke-width: 1.5;
+    stroke-dasharray: 3 2;
+    pointer-events: none;
+  }
+  .plant-mark .rotate-handle,
+  .plant-mark .resize-handle{
+    fill: #fff;
+    stroke: var(--color-clay);
+    stroke-width: 1.5;
+  }
+  .plant-mark .rotate-handle{ cursor: grab; }
+  .plant-mark .rotate-handle:active{ cursor: grabbing; }
+  .plant-mark .resize-handle{ cursor: nwse-resize; }
+
   /* Notizzettel: kleine Klebezettel, frei platzierbar */
   .note-mark{ cursor: grab; }
   .note-mark:active{ cursor: grabbing; }
@@ -889,14 +909,22 @@
   const ITEM_BY_ID = Object.fromEntries(ITEMS.map(it => [it.id, it]));
 
   // Liefert die Abmessungen eines Items in cm, unabhängig von der Form.
-  function getDims(item){
+  // inst (optional): platzierte Instanz - falls sie eigene w/h trägt (per
+  // Resize-Griff geändertes Material), haben diese Vorrang vor den
+  // Item-Standardmaßen. Ohne inst (z.B. beim Sidebar-Drag eines neuen Items,
+  // wo es noch keine Instanz gibt) gelten unverändert die Item-Standardmaße.
+  function getDims(item, inst){
     if(item.shape === "rect"){
-      return { shape:"rect", w:item.widthCm, h:item.heightCm };
+      return {
+        shape:"rect",
+        w: (inst && inst.w) || item.widthCm,
+        h: (inst && inst.h) || item.heightCm
+      };
     }
     // Kreisförmig: Durchmesser kommt bevorzugt aus footprintCm (Pflanzen-Standard),
     // sonst aus diameterCm oder ersatzweise widthCm (praktisch für rundes Baumaterial
     // ohne eigenes Pflanzabstand-Feld).
-    const d = item.footprintCm ?? item.diameterCm ?? item.widthCm;
+    const d = (inst && inst.w) || (item.footprintCm ?? item.diameterCm ?? item.widthCm);
     return { shape:"circle", w:d, h:d };
   }
 
@@ -1219,6 +1247,19 @@
     updateStickyHeadingOffsets();
   }
 
+  // Summe der Höhen aller aktuell sichtbaren sticky Headings (Pflanzen +
+  // Material) - das ist der Bereich am oberen Rand der Liste, der permanent
+  // von den "klebenden" Überschriften verdeckt wird und beim Berechnen von
+  // sichtbaren Ausschnitten (z.B. beim Zentrieren einer Karte) mit
+  // berücksichtigt werden muss.
+  function getStickyHeadingsTotalHeight(){
+    let total = 0;
+    plantListEl.querySelectorAll(".list-heading").forEach(h => {
+      total += h.getBoundingClientRect().height;
+    });
+    return total;
+  }
+
   // Beide Gruppen-Überschriften ("Pflanzen"/"Material") bleiben beim Scrollen
   // sichtbar (position: sticky). Damit sie sich nicht überlappen, bekommt
   // jede nachfolgende Heading als --sticky-offset die tatsächlich gemessene
@@ -1230,6 +1271,32 @@
     headings.forEach(h => {
       h.style.setProperty("--sticky-offset", offset + "px");
       offset += h.getBoundingClientRect().height;
+    });
+  }
+
+  // Scrollt eine Karte in die Mitte des tatsächlich sichtbaren Bereichs der
+  // Liste - "tatsächlich sichtbar" heißt: unterhalb der sticky Headings, die
+  // sonst permanent oben kleben und die Karte verdecken würden, wenn sie
+  // (wie bei scrollIntoView block:"nearest"/"start") ganz oben landet.
+  function scrollCardToVisibleCenter(card){
+    const stickyHeight = getStickyHeadingsTotalHeight();
+    const containerHeight = plantListEl.clientHeight;
+    const visibleHeight = containerHeight - stickyHeight;
+
+    // Position der Karte relativ zum Scroll-Inhalt (unabhängig vom aktuellen
+    // scrollTop) - offsetTop ist relativ zum ersten positionierten Vorfahren,
+    // bei dieser Struktur (kein position:relative dazwischen) ist das
+    // zuverlässig relativ zu plantListEl.
+    const cardOffsetTop = card.offsetTop;
+    const cardCenter = cardOffsetTop + card.offsetHeight / 2;
+
+    // Zielscroll so wählen, dass cardCenter genau in der Mitte des sichtbaren
+    // (nicht von Headings verdeckten) Bereichs landet.
+    const targetScrollTop = cardCenter - stickyHeight - visibleHeight / 2;
+
+    plantListEl.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: "smooth"
     });
   }
 
@@ -1296,7 +1363,7 @@
     renderPlantList();
     if(itemId){
       const card = plantListEl.querySelector(`.plant-card[data-item-id="${itemId}"]`);
-      if(card) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      if(card) scrollCardToVisibleCenter(card);
     }
   }
 
@@ -1340,7 +1407,11 @@
   function createVisualElement(item, dims){
     const minSide = Math.min(dims.w, dims.h);
     if(item.image){
-      const size = Math.max(10, Math.min(minSide * 0.7, 50));
+      // Bild soll mit dem umgebenden Kreis/Rechteck mitwachsen, statt bei
+      // einer festen Pixelgröße zu deckeln - 90% der kleineren Kantenlänge
+      // lässt bei Kreisen noch einen kleinen Rand zum Rahmen, bei Rechtecken
+      // etwas Luft an den Ecken.
+      const size = Math.max(10, minSide * 0.9);
       const img = document.createElementNS(SVG_NS, "image");
       img.setAttribute("href", item.image);
       img.setAttributeNS("http://www.w3.org/1999/xlink", "href", item.image); // Fallback für ältere Renderer
@@ -1350,27 +1421,42 @@
       return img;
     }
     if(item.icon){
-      const fontSize = Math.max(6, Math.min(minSide * 0.5, 13));
+      // Gleiches Prinzip für Emoji-Icons: mit der Objektgröße mitwachsen statt
+      // bei 13px zu stoppen. Der Faktor 0.62 ist kleiner als bei Bildern,
+      // weil Emoji-Glyphen im SVG-Textrendering mehr Eigenabstand mitbringen
+      // als ihre nominelle font-size vermuten lässt.
+      const fontSize = Math.max(6, minSide * 0.62);
       const text = document.createElementNS(SVG_NS, "text");
       text.setAttribute("font-size", fontSize);
       text.setAttribute("class", "plant-visual");
+      // text-anchor/dominant-baseline zusätzlich als Attribute setzen (nicht
+      // nur per CSS-Regel): beim PNG-Export wird das SVG per Blob-URL in ein
+      // <img> geladen und auf Canvas gerastert - dabei wenden nicht alle
+      // Browser die Zentrierung zuverlässig an, wenn sie nur aus einem
+      // externen <style>-Block stammt. Als Attribut ist sie Teil des
+      // SVG-Markups selbst und übersteht den Export-Weg zuverlässig.
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dominant-baseline", "middle");
       text.textContent = item.icon;
       return text;
     }
     return null;
   }
 
-  function positionMark(g, item, x, y){
-    const dims = getDims(item);
+  function positionMark(g, item, x, y, inst){
+    const dims = getDims(item, inst);
     // Gecachte Referenzen bevorzugen (siehe renderBed) - querySelector nur als
     // Fallback, falls g aus irgendeinem Grund ohne Cache hereinkommt.
     const shapeEl = g._shapeEl || g.querySelector("circle, rect");
     if(dims.shape === "circle"){
       shapeEl.setAttribute("cx", x);
       shapeEl.setAttribute("cy", y);
+      shapeEl.setAttribute("r", dims.w / 2);
     } else {
       shapeEl.setAttribute("x", x - dims.w/2);
       shapeEl.setAttribute("y", y - dims.h/2);
+      shapeEl.setAttribute("width", dims.w);
+      shapeEl.setAttribute("height", dims.h);
     }
     const visualEl = g._visualEl !== undefined ? g._visualEl : g.querySelector(".plant-visual");
     if(visualEl){
@@ -1378,13 +1464,29 @@
         // Bilder werden per x/y (linke obere Ecke) positioniert, anders als
         // Text mit text-anchor:middle - deshalb hier um die halbe Kantenlänge
         // versetzt, damit auch das Bild auf (x,y) zentriert erscheint.
-        const size = parseFloat(visualEl.getAttribute("width"));
+        // Größe hier aus dims (statt dem alten width-Attribut) neu berechnen,
+        // damit sie mit einem per Resize-Griff geänderten Material mitwächst.
+        const minSide = Math.min(dims.w, dims.h);
+        const size = Math.max(10, minSide * 0.9);
+        visualEl.setAttribute("width", size);
+        visualEl.setAttribute("height", size);
         visualEl.setAttribute("x", x - size/2);
         visualEl.setAttribute("y", y - size/2);
       } else {
+        const minSide = Math.min(dims.w, dims.h);
+        visualEl.setAttribute("font-size", Math.max(6, minSide * 0.62));
         visualEl.setAttribute("x", x);
         visualEl.setAttribute("y", y);
       }
+    }
+    // Rotation gilt für Material (Mauerziegel quer verlegen usw.) - als
+    // transform auf die ganze Gruppe, damit Form, Bild/Icon und die
+    // Ziehgriffe gemeinsam mitdrehen. Pflanzen haben kein rotation-Feld,
+    // dort bleibt die Gruppe unverändert (kein transform-Attribut).
+    if(inst && inst.rotation){
+      g.setAttribute("transform", `rotate(${inst.rotation}, ${x}, ${y})`);
+    } else {
+      g.removeAttribute("transform");
     }
   }
 
@@ -1408,6 +1510,13 @@
       }
     }
     renderSelectionBar();
+    // Dreh-/Skalier-Griffe (nur bei Einzelauswahl von Material sichtbar,
+    // siehe renderBed) müssen nach jeder Auswahländerung neu berechnet
+    // werden - ein kompletter renderBed() hier ist unkritisch, weil die
+    // Selektion (anders als beim Ziehen) kein pointermove-Dauerfeuer ist,
+    // bei dem der Pointer-Capture-Bug (siehe Kommentar in renderBed) greifen
+    // könnte.
+    renderBed();
     // Sidebar mit dem (zuletzt) ausgewählten Objekt synchronisieren, damit
     // das Detail-Panel passende Infos zeigt.
     if(uid != null){
@@ -1424,7 +1533,22 @@
     selectedUids.clear();
     selectedNoteUids.clear();
     renderSelectionBar();
+    renderBed(); // entfernt u.a. die Dreh-/Skalier-Griffe des zuvor ausgewählten Materials
     setActiveCard(null);
+  }
+
+  // Wählt alle bereits platzierten Instanzen eines Items im Beet aus - die
+  // Umkehrung von setActiveCard() (Objekt im Beet auswählen -> zeigt die
+  // passende Karte). Tut nichts, wenn das Item noch gar nicht platziert ist,
+  // damit ein Klick auf eine unbenutzte Karte nicht versehentlich die
+  // Auswahl "leerräumt".
+  function selectInstancesByItemId(itemId){
+    const matches = state.instances.filter(i => i.itemId === itemId);
+    if(!matches.length) return;
+    selectedUids = new Set(matches.map(i => i.uid));
+    selectedNoteUids.clear();
+    renderSelectionBar();
+    renderBed();
   }
 
   /* ---------------------------------------------------------------
@@ -1837,7 +1961,7 @@
     state.instances.forEach(inst => {
       const item = ITEM_BY_ID[inst.itemId];
       if(!item) return;
-      const dims = getDims(item);
+      const dims = getDims(item, inst);
 
       const g = document.createElementNS(SVG_NS, "g");
       g.setAttribute("class", "plant-mark" + (selectedUids.has(inst.uid) ? " selected" : "") + (inst.locked ? " locked" : ""));
@@ -1876,9 +2000,18 @@
       g._shapeEl = shapeEl;
       g._visualEl = visualEl;
 
-      positionMark(g, item, inst.x, inst.y);
+      positionMark(g, item, inst.x, inst.y, inst);
       attachInstancePointerHandlers(g, inst.uid);
       attachContextMenuHandler(g, inst.uid);
+
+      // Dreh-/Skalier-Griffe: nur für Material (nicht für Pflanzen, deren
+      // Größe durch Reihen-/Pflanzabstand vorgegeben ist) und nur, wenn genau
+      // dieses eine Objekt gerade ausgewählt ist - sonst wäre das Beet bei
+      // vielen platzierten Objekten optisch überladen.
+      if(item.kind === "material" && selectedUids.size === 1 && selectedUids.has(inst.uid)){
+        attachTransformHandles(g, item, inst, dims);
+      }
+
       bedSvg.appendChild(g);
     });
 
@@ -2172,6 +2305,18 @@
       return inst && inst.locked;
     });
 
+    // "Zurücksetzen" nur anbieten, wenn genau ein Material-Objekt ausgewählt
+    // ist und es tatsächlich von seiner Standardgröße/-ausrichtung abweicht -
+    // sonst wäre der Button die meiste Zeit wirkungslos sichtbar.
+    let resetTarget = null;
+    if(uids.length === 1){
+      const inst = state.instances.find(i => i.uid === uids[0]);
+      const item = inst && ITEM_BY_ID[inst.itemId];
+      if(item && item.kind === "material" && (inst.rotation || inst.w || inst.h)){
+        resetTarget = inst;
+      }
+    }
+
     contextMenuEl.innerHTML = `
       <button id="ctxBringFront">⬆️ ${t("ctx_bring_front")}</button>
       <button id="ctxMoveForward">🔼 ${t("ctx_move_forward")}</button>
@@ -2179,12 +2324,23 @@
       <button id="ctxSendBack">⬇️ ${t("ctx_send_back")}</button>
       <hr>
       <button id="ctxToggleLock">${allLocked ? "🔓 " + t("ctx_unlock") : "🔒 " + t("ctx_lock")}</button>
+      ${resetTarget ? `<hr><button id="ctxResetTransform">↺ ${t("ctx_reset_transform")}</button>` : ""}
     `;
     contextMenuEl.querySelector("#ctxBringFront").addEventListener("click", () => { bringUidsToFront(uids); closeContextMenu(); });
     contextMenuEl.querySelector("#ctxMoveForward").addEventListener("click", () => { moveUidsOneStep(uids, "forward"); closeContextMenu(); });
     contextMenuEl.querySelector("#ctxMoveBackward").addEventListener("click", () => { moveUidsOneStep(uids, "backward"); closeContextMenu(); });
     contextMenuEl.querySelector("#ctxSendBack").addEventListener("click", () => { sendUidsToBack(uids); closeContextMenu(); });
     contextMenuEl.querySelector("#ctxToggleLock").addEventListener("click", () => { setLockedForUids(uids, !allLocked); closeContextMenu(); });
+    if(resetTarget){
+      contextMenuEl.querySelector("#ctxResetTransform").addEventListener("click", () => {
+        pushHistory();
+        delete resetTarget.rotation;
+        delete resetTarget.w;
+        delete resetTarget.h;
+        renderBed();
+        closeContextMenu();
+      });
+    }
 
     contextMenuEl.hidden = false;
     // Erst nach dem Einblenden messen (getBoundingClientRect braucht das
@@ -2334,6 +2490,15 @@
           if(ghost){ ghost.remove(); ghost = null; }
         } else {
           renderDetailPanel(ITEM_BY_ID[itemId]);
+          // Umgekehrte Richtung zur bestehenden "Objekt im Beet auswählen ->
+          // zeigt passende Karte" Funktion: ein reiner Klick auf die Karte
+          // markiert alle bereits platzierten Objekte dieses Typs im Beet -
+          // aber nur, wenn dort gerade noch nichts anderes ausgewählt ist,
+          // damit man nicht versehentlich eine bestehende (ggf. bewusst
+          // andere) Auswahl überschreibt, während man nur stöbert.
+          if(!selectedUids.size && !selectedNoteUids.size){
+            selectInstancesByItemId(itemId);
+          }
         }
       }
 
@@ -2407,19 +2572,19 @@
             const deltaY = (p.y + offsetY) - grabStartY;
             groupMembers.forEach(m => {
               const mItem = ITEM_BY_ID[m.inst.itemId];
-              const mDims = getDims(mItem);
+              const mDims = getDims(mItem, m.inst);
               m.inst.x = clamp(m.startX + deltaX, mDims.w/2, state.bedWidth - mDims.w/2);
               m.inst.y = clamp(m.startY + deltaY, mDims.h/2, state.bedHeight - mDims.h/2);
-              positionMark(m.g, mItem, m.inst.x, m.inst.y);
+              positionMark(m.g, mItem, m.inst.x, m.inst.y, m.inst);
             });
           } else {
             const item = ITEM_BY_ID[inst.itemId];
-            const dims = getDims(item);
+            const dims = getDims(item, inst);
             inst.x = clamp(p.x + offsetX, dims.w/2, state.bedWidth - dims.w/2);
             inst.y = clamp(p.y + offsetY, dims.h/2, state.bedHeight - dims.h/2);
             // Nur die Position dieses einen Markers aktualisieren, NICHT das ganze
             // SVG neu aufbauen - sonst geht die Pointer-Capture verloren (Ruckel-Bug).
-            positionMark(g, item, inst.x, inst.y);
+            positionMark(g, item, inst.x, inst.y, inst);
           }
         }
       }
@@ -2441,6 +2606,168 @@
       g.addEventListener("pointerup", onUp);
       g.addEventListener("pointercancel", onUp);
     });
+  }
+
+  // Dreh- und Skalier-Griff für ein einzeln ausgewähltes Material-Objekt
+  // (z.B. Mauerziegel quer verlegen, Trittstein vergrößern). Beide Griffe
+  // werden als Kind von g angehängt - dadurch erben sie automatisch das
+  // rotate(...)-Transform der Gruppe und drehen sich mit, ohne dass hier
+  // selbst mit Rotationsmatrizen gerechnet werden müsste.
+  const HANDLE_R = 6; // Radius der Griff-Kreise in cm (Bildschirmgröße hängt vom Zoom ab)
+
+  function attachTransformHandles(g, item, inst, dims){
+    const halfW = dims.w / 2, halfH = dims.h / 2;
+    const cx = inst.x, cy = inst.y;
+
+    // -------- Rotationsgriff: kleiner Kreis oberhalb der Form + Verbindungslinie --------
+    const rotHandleDistance = (dims.shape === "circle" ? halfW : halfH) + 22;
+    const rotLine = document.createElementNS(SVG_NS, "line");
+    rotLine.setAttribute("class", "transform-handle-line");
+    rotLine.setAttribute("x1", cx); rotLine.setAttribute("y1", cy - (dims.shape === "circle" ? halfW : halfH));
+    rotLine.setAttribute("x2", cx); rotLine.setAttribute("y2", cy - rotHandleDistance);
+    g.appendChild(rotLine);
+
+    const rotHandle = document.createElementNS(SVG_NS, "circle");
+    rotHandle.setAttribute("class", "rotate-handle");
+    rotHandle.setAttribute("cx", cx);
+    rotHandle.setAttribute("cy", cy - rotHandleDistance);
+    rotHandle.setAttribute("r", HANDLE_R);
+    g.appendChild(rotHandle);
+
+    // -------- Resize-Griff: unten rechts, wächst/schrumpft vom Mittelpunkt aus --------
+    const resizeHandle = document.createElementNS(SVG_NS, "circle");
+    resizeHandle.setAttribute("class", "resize-handle");
+    resizeHandle.setAttribute("r", HANDLE_R);
+    g.appendChild(resizeHandle);
+
+    // Referenzen cachen, damit updateTransformHandlePositions() sie während
+    // des Ziehens direkt per Attribut nachführen kann, ohne renderBed()
+    // aufzurufen (siehe Kommentar dort zum Pointer-Capture-Problem).
+    g._rotLineEl = rotLine;
+    g._rotHandleEl = rotHandle;
+    g._resizeHandleEl = resizeHandle;
+
+    updateTransformHandlePositions(g, dims, inst);
+
+    rotHandle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const pointerId = e.pointerId;
+      rotHandle.setPointerCapture(pointerId);
+      const startRotation = inst.rotation || 0;
+      // Winkel zwischen Mittelpunkt und Mauszeiger beim Greifen merken, damit
+      // die Drehung genau am Startpunkt "andockt" statt zu springen.
+      const startSvg = clientToSvgPoint(e.clientX, e.clientY);
+      const startPointerAngle = Math.atan2(startSvg.y - cy, startSvg.x - cx) * 180 / Math.PI;
+      let moved = false;
+
+      function onMove(ev){
+        if(!moved){ moved = true; pushHistory(); }
+        const p = clientToSvgPoint(ev.clientX, ev.clientY);
+        const pointerAngle = Math.atan2(p.y - cy, p.x - cx) * 180 / Math.PI;
+        let newRotation = startRotation + (pointerAngle - startPointerAngle);
+        // Auf 0-360 normalisieren statt unbegrenzt auf-/abzuzählen - reine
+        // Kosmetik für gespeicherte Werte, wirkt sich nicht auf die Optik aus.
+        newRotation = ((newRotation % 360) + 360) % 360;
+        // Beim Ziehen nahe an 0/90/180/270° einrasten (±4°) - erleichtert das
+        // exakte "quer verlegen" von rechteckigem Material spürbar.
+        [0, 90, 180, 270, 360].forEach(snap => {
+          if(Math.abs(newRotation - snap) < 4) newRotation = snap % 360;
+        });
+        inst.rotation = newRotation;
+        positionMark(g, item, inst.x, inst.y, inst);
+        // Der Rotationsgriff selbst dreht via g's transform bereits mit -
+        // seine lokale (unrotierte) Position bleibt also unverändert, hier
+        // ist nichts weiter nachzuführen.
+      }
+      function onUp(){
+        rotHandle.releasePointerCapture(pointerId);
+        rotHandle.removeEventListener("pointermove", onMove);
+        rotHandle.removeEventListener("pointerup", onUp);
+        rotHandle.removeEventListener("pointercancel", onUp);
+      }
+      rotHandle.addEventListener("pointermove", onMove);
+      rotHandle.addEventListener("pointerup", onUp);
+      rotHandle.addEventListener("pointercancel", onUp);
+    });
+
+    resizeHandle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const pointerId = e.pointerId;
+      resizeHandle.setPointerCapture(pointerId);
+      let moved = false;
+
+      // Der Ziehpunkt liegt auf einer ggf. gedrehten Form - die Mausbewegung
+      // muss deshalb zunächst "zurückgedreht" werden, um im lokalen (nicht
+      // rotierten) Koordinatensystem des Objekts zu rechnen. Ohne das würde
+      // Ziehen bei z.B. 90° gedrehtem Material die falsche Achse skalieren.
+      const rotRad = (inst.rotation || 0) * Math.PI / 180;
+      const cosA = Math.cos(-rotRad), sinA = Math.sin(-rotRad);
+
+      function onMove(ev){
+        if(!moved){ moved = true; pushHistory(); }
+        const p = clientToSvgPoint(ev.clientX, ev.clientY);
+        const dxWorld = p.x - cx, dyWorld = p.y - cy;
+        // Rücktransformation in lokale Koordinaten (Gegenrotation anwenden).
+        const dxLocal = dxWorld * cosA - dyWorld * sinA;
+        const dyLocal = dxWorld * sinA + dyWorld * cosA;
+
+        if(dims.shape === "circle"){
+          // Gleichmäßig wachsen: Durchmesser = 2x Abstand des Ziehpunkts vom
+          // Zentrum (lokale Koordinaten, unabhängig von der Rotation - ein
+          // Kreis sieht bei jeder Rotation gleich aus, das Ziehen soll sich
+          // trotzdem intuitiv anfühlen, egal wo der Griff gerade steht).
+          inst.w = Math.max(10, Math.hypot(dxLocal, dyLocal) * 2);
+          inst.h = inst.w;
+        } else {
+          inst.w = Math.max(10, dxLocal * 2);
+          inst.h = Math.max(10, dyLocal * 2);
+        }
+        const newDims = getDims(item, inst);
+        positionMark(g, item, inst.x, inst.y, inst);
+        // Resize-Griff (und bei Größenänderung auch Rotationsgriff+Linie,
+        // deren Abstand von der Kantenlänge abhängt) live mitziehen - OHNE
+        // renderBed(): das würde den gerade aktiven Pointer-Capture auf
+        // resizeHandle zerstören (Element wird neu erzeugt) und den Drag
+        // nach 2-3px abrupt beenden. Reines Attribut-Update ist hier sicher.
+        updateTransformHandlePositions(g, newDims, inst);
+      }
+      function onUp(){
+        resizeHandle.releasePointerCapture(pointerId);
+        resizeHandle.removeEventListener("pointermove", onMove);
+        resizeHandle.removeEventListener("pointerup", onUp);
+        resizeHandle.removeEventListener("pointercancel", onUp);
+        if(moved) renderSelectionBar(); // Statusleiste ggf. mit neuer Größe aktualisieren
+      }
+      resizeHandle.addEventListener("pointermove", onMove);
+      resizeHandle.addEventListener("pointerup", onUp);
+      resizeHandle.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  // Positioniert Rotations-/Resize-Griff + Verbindungslinie neu, ausgehend
+  // von den aktuellen dims/inst - ohne irgendein Element neu zu erzeugen.
+  // Wird sowohl beim ersten Erzeugen (attachTransformHandles) als auch live
+  // während des Resize-Ziehens aufgerufen (siehe dort).
+  function updateTransformHandlePositions(g, dims, inst){
+    const halfW = dims.w / 2, halfH = dims.h / 2;
+    const cx = inst.x, cy = inst.y;
+
+    const rotHandleDistance = (dims.shape === "circle" ? halfW : halfH) + 22;
+    g._rotLineEl.setAttribute("x1", cx);
+    g._rotLineEl.setAttribute("y1", cy - (dims.shape === "circle" ? halfW : halfH));
+    g._rotLineEl.setAttribute("x2", cx);
+    g._rotLineEl.setAttribute("y2", cy - rotHandleDistance);
+    g._rotHandleEl.setAttribute("cx", cx);
+    g._rotHandleEl.setAttribute("cy", cy - rotHandleDistance);
+
+    if(dims.shape === "circle"){
+      const d = halfW / Math.SQRT2;
+      g._resizeHandleEl.setAttribute("cx", cx + d);
+      g._resizeHandleEl.setAttribute("cy", cy + d);
+    } else {
+      g._resizeHandleEl.setAttribute("cx", cx + halfW);
+      g._resizeHandleEl.setAttribute("cy", cy + halfH);
+    }
   }
 
   // Rechteck aufziehen, wenn ein Item "bewaffnet" ist (Flächenfüllung)
@@ -2701,6 +3028,46 @@
         renderBed();
       }
     }
+    // Pfeiltasten: ausgewählte Objekte/Notizen pixelweise verschieben (1 cm
+    // pro Druck, mit gehaltener Shift-Taste 10 cm für größere Sprünge) -
+    // gesperrte Instanzen werden dabei übersprungen, genau wie beim Ziehen
+    // mit der Maus.
+    if(!isTyping && (selectedUids.size || selectedNoteUids.size) &&
+       ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)){
+      e.preventDefault(); // sonst scrollt z.B. Firefox die Seite mit
+      const step = e.shiftKey ? 10 : 1;
+      let dx = 0, dy = 0;
+      if(e.key === "ArrowUp") dy = -step;
+      else if(e.key === "ArrowDown") dy = step;
+      else if(e.key === "ArrowLeft") dx = -step;
+      else if(e.key === "ArrowRight") dx = step;
+
+      // Erst alle betroffenen Instanzen/Notizen sammeln, dann EINMAL
+      // pushHistory() aufrufen, falls sich tatsächlich etwas bewegen lässt -
+      // sonst entstünde bei rein gesperrten Auswahlen ein leerer History-Eintrag.
+      const movableInsts = [...selectedUids]
+        .map(uid => state.instances.find(i => i.uid === uid))
+        .filter(inst => inst && !inst.locked);
+      const movableNotes = [...selectedNoteUids]
+        .map(uid => state.notes.find(n => n.uid === uid))
+        .filter(Boolean);
+
+      if(movableInsts.length || movableNotes.length){
+        pushHistory();
+        movableInsts.forEach(inst => {
+          const item = ITEM_BY_ID[inst.itemId];
+          if(!item) return;
+          const dims = getDims(item, inst);
+          inst.x = clamp(inst.x + dx, dims.w/2, state.bedWidth - dims.w/2);
+          inst.y = clamp(inst.y + dy, dims.h/2, state.bedHeight - dims.h/2);
+        });
+        movableNotes.forEach(note => {
+          note.x = clamp(note.x + dx, note.w/2, state.bedWidth - note.w/2);
+          note.y = clamp(note.y + dy, note.h/2, state.bedHeight - note.h/2);
+        });
+        renderBed();
+      }
+    }
   });
 
   // Fadenkreuz-Cursor, solange Strg gedrückt gehalten wird - signalisiert,
@@ -2915,6 +3282,9 @@
     const clone = bedSvg.cloneNode(true);
     clone.removeAttribute("class"); // z.B. "fill-armed"/"panning" nicht mit exportieren
     clone.querySelectorAll(".plant-mark").forEach(el => el.classList.remove("selected"));
+    // Dreh-/Skalier-Griffe (nur bei einzeln ausgewähltem Material sichtbar)
+    // sind reine Bedienelemente und gehören nicht ins exportierte Bild.
+    clone.querySelectorAll(".rotate-handle, .resize-handle, .transform-handle-line").forEach(el => el.remove());
 
     // Notizzettel für den SVG-Export bereinigen: Bedienelemente (Lösch-Knopf,
     // Ziehgriff, Skalier-Griff, Auswahlrahmen) raus. Der Text selbst wird
@@ -3182,7 +3552,17 @@
       canvasBg: state.canvasBg,
       bgImage: state.bgImage,
       bgImageVisible: state.bgImageVisible,
-      instances: state.instances.map(({uid, itemId, x, y, locked}) => locked ? ({uid, itemId, x, y, locked}) : ({uid, itemId, x, y})),
+      instances: state.instances.map(({uid, itemId, x, y, locked, rotation, w, h}) => {
+        const out = {uid, itemId, x, y};
+        if(locked) out.locked = locked;
+        // rotation/w/h nur bei Material relevant (per Dreh-/Skalier-Griff
+        // geändert) - nur mitschreiben, wenn tatsächlich vom Standard
+        // abweichend, damit unveränderte Objekte kompakt bleiben.
+        if(rotation) out.rotation = rotation;
+        if(w) out.w = w;
+        if(h) out.h = h;
+        return out;
+      }),
       notes: state.notes.map(({uid, x, y, w, h, text, bg, color, fontSize}) => ({uid, x, y, w, h, text, bg, color, fontSize}))
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
