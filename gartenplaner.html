@@ -977,6 +977,11 @@
   let fillLocked = false;      // true: die per Flächenfüllung neu erzeugten Instanzen
                                 // sofort mit locked:true anlegen (z.B. fixierte Rasenfläche)
   let activeCardItemId = null; // Item, dessen Karte in der Seitenleiste gerade hervorgehoben ist
+  // Reihenfolge der aktuell tatsächlich sichtbaren Karten (Pflanzen dann
+  // Material, eingeklappte Gruppen und weggefilterte Karten ausgenommen) -
+  // wird bei jedem renderPlantList() neu befüllt und ist die Grundlage für
+  // die Pfeiltasten-Navigation im Detail-Panel (siehe weiter unten).
+  let visibleCardOrder = [];
                                 // (z.B. weil im Raster ein Objekt dieses Typs ausgewählt wurde)
   let uidCounter = 1;
   let noteUidCounter = 1;
@@ -1093,6 +1098,13 @@
   const LANG_STORAGE_KEY = "gartenplaner_lang";
   let currentLang = localStorage.getItem(LANG_STORAGE_KEY);
   if(!I18N_AVAILABLE.includes(currentLang)) currentLang = APPLICATION_STARTUP_LANGUAGE_CODE;
+  // <html lang="..."> initial mit der tatsächlich verwendeten Sprache
+  // synchronisieren (statt dem fest im HTML stehenden "de") - wichtig für
+  // Screenreader/Barrierefreiheit und damit z.B. der Browser bei Bedarf die
+  // richtige automatische Übersetzung vorschlägt. Der interne Sprachcode
+  // "zh_CN" (Unterstrich, da als Objekt-Key in I18N verwendet) wird dabei in
+  // den korrekten BCP-47-Code "zh-CN" (Bindestrich) umgewandelt.
+  document.documentElement.lang = currentLang.replace("_", "-");
 
   function t(key, vars){
     let str = (I18N[currentLang] && I18N[currentLang][key]) ?? I18N.de[key] ?? key;
@@ -1169,6 +1181,7 @@
     currentLang = I18N_AVAILABLE.includes(code) ? code : APPLICATION_STARTUP_LANGUAGE_CODE;
     langSelectEl.value = currentLang;
     localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+    document.documentElement.lang = currentLang.replace("_", "-"); // <html lang="..."> synchron mit Sprachwechsel halten (zh_CN -> zh-CN)
     applyStaticTexts();
     renderPlantList();
     renderDetailPanel(activeCardItemId ? ITEM_BY_ID[activeCardItemId] : null);
@@ -1184,9 +1197,29 @@
   /* ---------------------------------------------------------------
      4) SIDEBAR: Liste rendern (zwei Gruppen: Pflanzen / Material)
   ----------------------------------------------------------------*/
+  // Felder, die NICHT durchsucht werden sollen: rein technische/visuelle
+  // Werte ohne durchsuchbaren "Inhalt" (id, Icon-Zeichen, Bildpfad, Farben).
+  const SEARCH_EXCLUDED_KEYS = new Set(["id", "icon", "image", "accent", "listAccent"]);
+
+  // Durchsucht ALLE Felder eines Items (Pflanze oder Material) nach dem
+  // Suchbegriff - nicht mehr nur den Namen. So findet man z.B. auch Einträge
+  // über Verwendungszweck, Standort, Herkunft, Notiz usw. Technische/visuelle
+  // Felder (s.o.) werden dabei bewusst ausgeklammert, da sie für den Nutzer
+  // keine sinnvollen Treffer liefern würden.
+  function itemMatchesSearch(it, q){
+    if(!q) return true;
+    for(const key in it){
+      if(SEARCH_EXCLUDED_KEYS.has(key)) continue;
+      const val = it[key];
+      if(val == null) continue;
+      if(String(val).toLowerCase().includes(q)) return true;
+    }
+    return false;
+  }
+
   function renderGroup(items, plantKind, headingLabel){
     const q = searchInputEl.value.trim().toLowerCase();
-    const filtered = items.filter(it => it.kind === plantKind && (!q || it.name.toLowerCase().includes(q)));
+    const filtered = items.filter(it => it.kind === plantKind && itemMatchesSearch(it, q));
     if(!filtered.length) return null;
 
     const isCollapsed = collapsedGroups[plantKind];
@@ -1232,12 +1265,16 @@
         if(armedItemId === it.id) disarmFill(); else armFill(it.id);
       });
       body.appendChild(card);
+      // Nur tatsächlich sichtbare Karten (Gruppe nicht eingeklappt) merken -
+      // Grundlage für die Pfeiltasten-Navigation im Detail-Panel weiter unten.
+      if(!isCollapsed) visibleCardOrder.push(it.id);
     });
     return frag;
   }
 
   function renderPlantList(){
     plantListEl.innerHTML = "";
+    visibleCardOrder = [];
     const plantsFrag = renderGroup(ITEMS, "plant", t("group_plants"));
     if(plantsFrag) plantListEl.appendChild(plantsFrag);
     const materialsFrag = renderGroup(ITEMS, "material", t("group_materials"));
@@ -1367,6 +1404,37 @@
       if(card) scrollCardToVisibleCenter(card);
     }
   }
+
+  // Pfeiltasten Hoch/Runter: springt in der Sidebar-Liste zur vorherigen/
+  // nächsten Karte und zeigt deren Daten im Detail-Panel - genau wie ein
+  // Klick auf die Karte. Nutzt visibleCardOrder (wird beim Rendern der Liste
+  // befüllt, siehe renderGroup) als Grundlage, damit Suche/eingeklappte
+  // Gruppen korrekt berücksichtigt werden.
+  //
+  // Greift NUR, wenn gerade keine Instanz/Notiz im Beet ausgewählt ist - für
+  // diesen Fall gibt es weiter unten bereits eine eigene Pfeiltasten-Logik,
+  // die das ausgewählte Beet-Objekt verschiebt (siehe dortiger Kommentar).
+  // Ein aktives Detail-Panel (activeCardItemId) ohne Beet-Auswahl entsteht
+  // z.B. durch Anklicken einer Sidebar-Karte selbst oder nach dem Löschen/
+  // Abwählen eines Beet-Objekts, dessen Karte noch nachwirkt.
+  document.addEventListener("keydown", (e) => {
+    if(e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    if(!activeCardItemId) return;
+    if(selectedUids.size || selectedNoteUids.size) return; // Vorrang: Beet-Objekt verschieben
+    const isTyping = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+    if(isTyping) return;
+    if(!visibleCardOrder.length) return;
+
+    const currentIndex = visibleCardOrder.indexOf(activeCardItemId);
+    if(currentIndex === -1) return; // Karte gerade weggefiltert/eingeklappt
+
+    const delta = e.key === "ArrowDown" ? 1 : -1;
+    const newIndex = currentIndex + delta;
+    if(newIndex < 0 || newIndex >= visibleCardOrder.length) return; // am Listenende stehenbleiben
+
+    e.preventDefault(); // verhindert Scrollen der Seite durch die Pfeiltaste
+    setActiveCard(visibleCardOrder[newIndex]);
+  });
 
   /* ---------------------------------------------------------------
      5) SVG-GARTEN rendern
@@ -2490,7 +2558,7 @@
           }
           if(ghost){ ghost.remove(); ghost = null; }
         } else {
-          renderDetailPanel(ITEM_BY_ID[itemId]);
+          setActiveCard(itemId);
           // Umgekehrte Richtung zur bestehenden "Objekt im Beet auswählen ->
           // zeigt passende Karte" Funktion: ein reiner Klick auf die Karte
           // markiert alle bereits platzierten Objekte dieses Typs im Beet -
@@ -2703,11 +2771,20 @@
       // Ziehen bei z.B. 90° gedrehtem Material die falsche Achse skalieren.
       const rotRad = (inst.rotation || 0) * Math.PI / 180;
       const cosA = Math.cos(-rotRad), sinA = Math.sin(-rotRad);
+      // ... und für die Rückrichtung (lokal -> Welt), um die verschobene
+      // obere linke Ecke wieder in Weltkoordinaten zu bringen.
+      const cosF = Math.cos(rotRad), sinF = Math.sin(rotRad);
+
+      // Startgröße/-mitte merken: die obere linke Ecke (lokal, unrotiert)
+      // soll beim Ziehen fix an ihrer Weltposition bleiben. Sie liegt bei
+      // (-startW/2, -startH/2) relativ zum aktuellen (Start-)Mittelpunkt.
+      const startW = dims.w, startH = dims.h;
+      const startCx = cx, startCy = cy;
 
       function onMove(ev){
         if(!moved){ moved = true; pushHistory(); }
         const p = clientToSvgPoint(ev.clientX, ev.clientY);
-        const dxWorld = p.x - cx, dyWorld = p.y - cy;
+        const dxWorld = p.x - startCx, dyWorld = p.y - startCy;
         // Rücktransformation in lokale Koordinaten (Gegenrotation anwenden).
         const dxLocal = dxWorld * cosA - dyWorld * sinA;
         const dyLocal = dxWorld * sinA + dyWorld * cosA;
@@ -2717,11 +2794,28 @@
           // Zentrum (lokale Koordinaten, unabhängig von der Rotation - ein
           // Kreis sieht bei jeder Rotation gleich aus, das Ziehen soll sich
           // trotzdem intuitiv anfühlen, egal wo der Griff gerade steht).
+          // Kreise bleiben zentriert (kein sinnvoller "Eckpunkt" bei runden
+          // Formen), daher hier weiterhin Wachstum aus der Mitte heraus.
           inst.w = Math.max(10, Math.hypot(dxLocal, dyLocal) * 2);
           inst.h = inst.w;
         } else {
-          inst.w = Math.max(10, dxLocal * 2);
-          inst.h = Math.max(10, dyLocal * 2);
+          // Ziehpunkt = neue untere rechte Ecke, lokal gemessen von der
+          // FIXEN oberen linken Ecke (-startW/2, -startH/2) aus.
+          const newW = Math.max(10, dxLocal + startW / 2);
+          const newH = Math.max(10, dyLocal + startH / 2);
+          inst.w = newW;
+          inst.h = newH;
+
+          // Mittelpunkt so verschieben, dass die obere linke Ecke an ihrer
+          // ursprünglichen Weltposition stehen bleibt: die neue Mitte liegt
+          // (newW/2, newH/2) von dieser Ecke entfernt (lokal) - Differenz zur
+          // Startmitte zurück in Weltkoordinaten gedreht und addiert.
+          const dLocalX = (newW - startW) / 2;
+          const dLocalY = (newH - startH) / 2;
+          const dWorldX = dLocalX * cosF - dLocalY * sinF;
+          const dWorldY = dLocalX * sinF + dLocalY * cosF;
+          inst.x = startCx + dWorldX;
+          inst.y = startCy + dWorldY;
         }
         const newDims = getDims(item, inst);
         positionMark(g, item, inst.x, inst.y, inst);

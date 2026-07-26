@@ -1,8 +1,4 @@
 /* ==================================================================
-   Julias's Gartenplaner- Pflanzen-Datenbank-Editor
-   Copyright (C) 2026 heino17
-   https://github.com/heino17/garden-planner
-
    pflanzen.js
    Datenquelle für den Gartenplaner. Bewusst als .js (nicht .json)
    ausgelagert, damit die Datei auch unter file:// per <script src>
@@ -13,10 +9,6 @@
    Felder, die du nicht hast, einfach weglassen oder leer lassen -
    der Gartenplaner kommt mit fehlenden Werten klar.
 ================================================================== */
-
-// -------------------- PFLANZEN --------------------
-// shape:"circle" -> Kreis-Durchmesser wird aus plantSpacing/rowSpacing
-// automatisch berechnet (Mittelwert, falls Bereich angegeben).
 
 // -------------------- PFLANZEN --------------------
 // shape:"circle" -> Kreis-Durchmesser wird aus plantSpacing/rowSpacing
@@ -889,22 +881,12 @@ const MATERIALS_DATA = [
     diameterCm:30, pattern:"brickPattern"
   },
   {
-    id:"holzzaun_hoch", kind:"material", shape:"rect", name:"Holzzaun hoch",
-    icon:"🧱", accent:"#865e3c", shape:"rect", widthCm:4,
-    heightCm:50
-  },
-  {
-    id:"holzzaun_quer", kind:"material", shape:"rect", name:"Holzzaun quer",
+    id:"holzzaun", kind:"material", shape:"rect", name:"Holzzaun",
     icon:"🧱", accent:"#865e3c", shape:"rect", widthCm:50,
     heightCm:4
   },
   {
-    id:"mauerziegel_hoch", kind:"material", shape:"rect", name:"Mauerziegel hoch",
-    icon:"🧱", accent:"#a8502b", shape:"rect", widthCm:12,
-    heightCm:25, pattern:"brickPattern", use:"Mauerbau / Einfassung", notiz:"Platzhaltergröße (12×25 cm) für einen Mauer-/Einfassungsstein – bei Bedarf anpassen."
-  },
-  {
-    id:"mauerziegel_qeer", kind:"material", shape:"rect", name:"Mauerziegel queer",
+    id:"mauerziegel", kind:"material", shape:"rect", name:"Mauerziegel",
     icon:"🧱", accent:"#a8502b", shape:"rect", widthCm:25,
     heightCm:12, pattern:"brickPattern", use:"Mauerbau / Einfassung", notiz:"Platzhaltergröße (25×12 cm) für einen Mauer-/Einfassungsstein – bei Bedarf anpassen."
   },

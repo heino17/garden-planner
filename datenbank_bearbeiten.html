@@ -793,6 +793,13 @@ if(urlLang && I18N_AVAILABLE.includes(urlLang)){
   currentLang = urlLang;
   localStorage.setItem(LANG_STORAGE_KEY, urlLang);
 }
+// <html lang="..."> initial mit der tatsächlich verwendeten Sprache
+// synchronisieren (statt dem fest im HTML stehenden "de") - wichtig für
+// Screenreader/Barrierefreiheit. Bewusst NACH dem ?lang=-Handling gesetzt,
+// damit ein per URL übergebener Sprachwechsel korrekt berücksichtigt wird.
+// Der interne Sprachcode "zh_CN" (Unterstrich, da als Objekt-Key in I18N
+// verwendet) wird dabei in den korrekten BCP-47-Code "zh-CN" umgewandelt.
+document.documentElement.lang = currentLang.replace("_", "-");
 
 function t(key, vars){
   let str = (I18N[currentLang] && I18N[currentLang][key]) ?? I18N.de[key] ?? key;
@@ -850,6 +857,7 @@ function applyLanguage(code){
   currentLang = I18N_AVAILABLE.includes(code) ? code : APPLICATION_STARTUP_LANGUAGE_CODE;
   document.getElementById("langSelect").value = currentLang;
   localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+  document.documentElement.lang = currentLang.replace("_", "-"); // <html lang="..."> synchron mit Sprachwechsel halten (zh_CN -> zh-CN)
   applyStaticTexts();
   updateGroupLabels();
   renderLists();
@@ -1196,6 +1204,49 @@ function makeRow(entry, kind){
   return tr;
 }
 
+// Liefert die aktuell sichtbaren (gefilterten) Einträge als eine einzige
+// durchgehende Liste in Anzeigereihenfolge: erst Pflanzen, dann Material -
+// so wie sie auch im listPanel untereinander stehen. Damit fühlt sich das
+// Pfeiltasten-Navigieren wie eine einzige Liste an, auch über die kind-
+// Grenze zwischen den beiden Tabellen hinweg.
+function getVisibleEntriesInOrder(){
+  const term = document.getElementById("searchBox").value.trim();
+  const filteredPlants = plants.filter(p=>matchesSearch(p, term)).map(p=>({kind:"plant", id:p.id}));
+  const filteredMaterials = materials.filter(m=>matchesSearch(m, term)).map(m=>({kind:"material", id:m.id}));
+  return filteredPlants.concat(filteredMaterials);
+}
+
+// Pfeiltasten Hoch/Runter: springt zur vorherigen/nächsten Zeile der aktuell
+// sichtbaren (gefilterten) Liste und öffnet sie sofort rechts im Formular -
+// genau wie ein Klick auf die Zeile. Wird nur aktiv, wenn der Fokus NICHT in
+// einem Eingabefeld liegt (sonst würde z.B. das Scrollen im Textarea-Feld
+// oder das Ändern eines <select>-Werts blockiert).
+document.addEventListener("keydown", (e)=>{
+  if(e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const tag = document.activeElement ? document.activeElement.tagName : "";
+  if(tag==="INPUT" || tag==="TEXTAREA" || tag==="SELECT") return;
+  if(!selected) return; // ohne bestehende Auswahl gibt es keinen sinnvollen Startpunkt
+
+  const entries = getVisibleEntriesInOrder();
+  if(entries.length===0) return;
+  const currentIndex = entries.findIndex(en=>en.kind===selected.kind && en.id===selected.id);
+  if(currentIndex===-1) return; // aktuell ausgewählter Eintrag ist z.B. weggefiltert
+
+  const delta = e.key==="ArrowDown" ? 1 : -1;
+  const newIndex = currentIndex + delta;
+  if(newIndex < 0 || newIndex >= entries.length) return; // am Anfang/Ende der Liste stehenbleiben
+
+  e.preventDefault(); // verhindert Scrollen der Seite durch die Pfeiltaste
+  const next = entries[newIndex];
+  openForm(next.kind, next.id);
+
+  // Neu ausgewählte Zeile ins Sichtfeld scrollen, falls sie außerhalb des
+  // sichtbaren Bereichs von listPanel liegt (lange Listen mit Scrollbalken).
+  const bodyId = next.kind==="plant" ? "plantTableBody" : "materialTableBody";
+  const row = document.getElementById(bodyId).querySelector(`tr.selected`);
+  if(row) row.scrollIntoView({block:"nearest"});
+});
+
 function escapeHtml(str){
   const div = document.createElement("div");
   div.textContent = str;
@@ -1232,6 +1283,7 @@ function updateImagePreview(path, imgEl, hintEl){
 
 function openForm(kind, id){
   selected = { kind, id };
+  renderLists(); // Auswahl-Markierung (Zeile) links sofort mit aktualisieren
   const isNew = id===null;
   const entry = isNew ? {} : getList(kind).find(e=>e.id===id);
 

@@ -65,7 +65,7 @@ Für die Bild-Funktion (eigene Fotos statt Icon je Pflanze, siehe unten) sowie d
 **Material drehen & Größe ändern**
 - Bei einzeln ausgewählten Material-Objekten (z. B. Mauerziegel, Trittsteine) erscheinen zwei Ziehgriffe direkt am Objekt:
   - **Dreh-Griff** (kleiner Kreis oberhalb der Form, mit Verbindungslinie): frei drehbar, rastet bei 0°/90°/180°/270° ein – praktisch, um z. B. einen Ziegel exakt quer zu verlegen, ohne ihn zweimal anlegen zu müssen
-  - **Größen-Griff** (unten rechts bzw. am Kreisrand): ändert Breite/Höhe (Rechtecke) bzw. Durchmesser (Kreise), wächst/schrumpft vom Mittelpunkt aus
+  - **Größen-Griff** (unten rechts bzw. am Kreisrand): ändert Breite/Höhe (Rechtecke) bzw. Durchmesser (Kreise), wächst/schrumpft aus der linken oberen Ecke
 - Icons und Bilder drehen und skalieren automatisch mit
 - Über das Rechtsklick-Kontextmenü lässt sich Drehung/Größe eines veränderten Objekts jederzeit auf den Ursprungszustand zurücksetzen
 - Rotation und Größe werden mit in die `.json` gespeichert; ältere Spielstände ohne diese Felder laden weiterhin problemlos
@@ -193,7 +193,7 @@ For the image feature (custom photos instead of an icon per plant, see below) an
 **Rotate & Resize Material**
 - When a single material object (e.g. a brick, stepping stone) is selected, two drag handles appear directly on the object:
   - **Rotate handle** (small circle above the shape, with a connecting line): freely rotatable, snaps to 0°/90°/180°/270° - handy for laying a brick exactly crosswise without having to build it twice
-  - **Resize handle** (bottom right, or on the circle's edge): changes width/height (rectangles) or diameter (circles), grows/shrinks from the center
+  - **Resize handle** (bottom right, or on the circle's edge): changes width/height (rectangles) or diameter (circles), grows/shrinks from the upper-left corner
 - Icons and images rotate and scale along with the object automatically
 - The right-click context menu lets you reset a changed object's rotation/size back to its original state at any time
 - Rotation and size are saved in the `.json` file; older saves without these fields continue to load without issues
