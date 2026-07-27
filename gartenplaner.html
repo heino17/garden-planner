@@ -873,7 +873,7 @@
 <input type="file" id="bgImageFileInput" accept="image/*" hidden>
 
 <footer>
-  <div class="footer-left">(c) 2026 <a style="color: #a99887 !important;" target="_blank" href="https://github.com/heino17/garden-planner">heino17</a></div>
+  <div class="footer-left">(c) 2026 <a style="color: #a99887 !important;" target="_blank" href="https://github.com/heino17/garden-planner">heino17</a> <span id="appVersionTag" style="opacity: 0.65; font-size: 0.85em;"></span></div>
   <div class="footer-center" id="footerScaleText">Maßstab: 1 Kachel im Garten = 100 cm. Reihen-/Pflanzabstände aus der Gemüse-Tabelle</div>
   <div class="footer-right"><a href="#" class="credits-link" id="footerCreditsLink" data-tooltip="Diese Anwendung wurde im Auftrag zu 100% von Anthropic's Claude.ai, in einem kostenlosen Konto erstellt. Ganz erstaunlich! 🧚🏻‍♀️" onclick="return false;">Credits</a></div>
 </footer>
@@ -886,6 +886,14 @@
 
 <script>
 (function(){
+
+  /* ---------------------------------------------------------------
+     0) APP-VERSION
+     Bei jedem inhaltlichen Update hochzählen (SemVer: MAJOR.MINOR.PATCH).
+     Wird unten im Footer neben "heino17" angezeigt.
+  ----------------------------------------------------------------*/
+  const APP_VERSION = "1.0.0";
+  document.getElementById("appVersionTag").textContent = "v" + APP_VERSION;
 
   /* ---------------------------------------------------------------
      1) ITEM-KATALOG (Pflanzen + Baumaterial zusammenführen)

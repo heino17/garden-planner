@@ -704,12 +704,20 @@
 </main>
 
 <footer>
-  <div class="footer-left">(c) 2026 <a style="color: #c8d9c2 !important;" target="_blank" href="https://github.com/heino17/garden-planner">heino17</a></div>
+  <div class="footer-left">(c) 2026 <a style="color: #c8d9c2 !important;" target="_blank" href="https://github.com/heino17/garden-planner">heino17</a> <span id="appVersionTag" style="opacity: 0.65; font-size: 0.85em;"></span></div>
   <div class="footer-center">❤️</div>
   <div class="footer-right"><a href="#" id="footerCreditsLink" class="credits-link" data-tooltip="Diese Anwendung wurde im Auftrag zu 100% von Anthropic's Claude.ai, in einem kostenlosen Konto erstellt. Ganz erstaunlich! 🧚🏻‍♀️" onclick="return false;">Credits</a></div>
 </footer>
 
 <script>
+/* ==================================================================
+   App-Version
+   Bei jedem inhaltlichen Update hochzählen (SemVer: MAJOR.MINOR.PATCH).
+   Wird unten im Footer neben "heino17" angezeigt.
+================================================================== */
+const APP_VERSION = "1.0.0";
+document.getElementById("appVersionTag").textContent = "v" + APP_VERSION;
+
 /* ==================================================================
    Header ein-/ausklappen
 ================================================================== */

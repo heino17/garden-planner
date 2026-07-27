@@ -1,4 +1,9 @@
-/* ==================================================================
+/*
+   Julias's Gartenplaner- Pflanzen-Datenbank-Editor
+   Copyright (C) 2026 heino17
+   https://github.com/heino17/garden-planner
+
+   ==================================================================
    pflanzen.js
    Datenquelle für den Gartenplaner. Bewusst als .js (nicht .json)
    ausgelagert, damit die Datei auch unter file:// per <script src>
