@@ -694,6 +694,7 @@ const I18N = {
     note_placeholder: "메모 …",
     note_single: "메모",
 
+    footer_scale: "축척: 정원의 1칸 = 100cm. 줄 간격/포기 간격은 채소 표 참고",
     footer_credits_tooltip: "이 애플리케이션은 Anthropic의 Claude.ai가 무료 계정으로 100% 제작했습니다. 정말 놀랍네요! 🧚🏻‍♀️",
     footer_credits_link: "크레딧",
 
@@ -792,6 +793,7 @@ const I18N = {
     note_placeholder: "便签…",
     note_single: "便签",
 
+    footer_scale: "比例：花园中的1格 = 100厘米。行距/株距请参考蔬菜表",
     footer_credits_tooltip: "此应用完全由 Anthropic 的 Claude.ai 在免费账户中创建。相当惊人！🧚🏻‍♀️",
     footer_credits_link: "制作信息",
 
